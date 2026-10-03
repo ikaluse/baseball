@@ -579,7 +579,7 @@ function drawBatter(now){
 }
 function drawZone(){
   const a=proj(-ZX,ZT,0), b=proj(ZX,ZB,0), w=b.X-a.X, h=b.Y-a.Y;
-  if(humanPit()&&G){ // 冷熱區
+  if(G&&(humanPit()||humanBat())){ // 冷熱區：投球時看對方打者的、打擊時看自己打者的
     const hz=curBatter().hz;
     for(let r=0;r<3;r++)for(let c=0;c<3;c++){const v=hz[r*3+c]; if(!v)continue;
       ctx.fillStyle=v>0?`rgba(235,70,40,${0.22+v*0.16})`:`rgba(60,120,235,${0.22-v*0.14})`; ctx.fillRect(a.X+w*c/3+1,a.Y+h*r/3+1,w/3-2,h/3-2);}
