@@ -785,3 +785,21 @@ button:focus-visible{outline:3px solid var(--hi);outline-offset:2px;}
 .ad-cloud td input[type=number]{width:84px;}
 .ad-cloud td:nth-child(2){font-size:11.5px;color:var(--muted);}
 .ad-view{border-left:4px solid #ffd84a;} .ad-view span{display:block;margin-top:4px;font-weight:700;}
+
+/* 連線對戰：大廳、房間 */
+.net-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0;}
+.net-card{border:2px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;}
+.net-card h2{margin:0;font-size:17px;} .net-card .tr-tip{margin:0;flex:1;} .net-card .hot-btn{padding:9px;font-size:16px;}
+.net-join{display:flex;gap:6px;} .net-join input{flex:1;min-width:0;padding:8px;font:700 18px var(--num);letter-spacing:.15em;text-transform:uppercase;} .net-join .hot-btn{width:auto;padding:8px 14px;}
+.net-code{display:flex;align-items:center;gap:12px;margin:10px 0;padding:10px 14px;border:2px dashed var(--accent);border-radius:6px;}
+.net-code b{font:700 30px var(--num);letter-spacing:.2em;color:var(--accent);}
+.net-ps{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin:10px 0;}
+.net-vs{font:italic 700 20px var(--num);color:var(--accent);font-style:italic;}
+.net-p{border:2px solid var(--line);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0;}
+.net-p.ready{border-color:#3fb26b;} .net-p.empty{opacity:.65;border-style:dashed;}
+.net-p span{font-size:13px;} .net-p em{font-style:normal;font-size:12px;color:var(--muted);} .net-p.ready em{color:#3fb26b;font-weight:700;}
+.net-p .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px;}
+.net-wait{text-align:center;padding:18px 0;}
+.net-spin{width:42px;height:42px;margin:0 auto 10px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);animation:netspin 1s linear infinite;}
+@keyframes netspin{to{transform:rotate(360deg)}}
+@media (max-width:520px){.net-ps{grid-template-columns:1fr;} .net-vs{text-align:center;}}

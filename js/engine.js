@@ -758,12 +758,15 @@ function gameDecisions(g){
   const ws=a>h?0:1, wt=g.teams[ws], ga=g.goAhead;
   let wp=ga.wp, lp=ga.lp;
   if(ga.side!==ws) return {};
-  if(wp===wt.pitchers[0]&&wp.ps.outs<15){
+  // 用編號比對（連線對戰時比賽狀態是從房主傳來的副本，不是同一個物件）；換成這隊陣中的那個物件
+  const same=(a,b)=>!!a&&!!b&&a.id===b.id;
+  wp=wt.pitchers.find(p=>same(p,wp))||wp; lp=g.teams[1-ws].pitchers.find(p=>same(p,lp))||lp;
+  if(same(wp,wt.pitchers[0])&&wp.ps.outs<15){
     const rel=wt.pitchers.slice(1).filter(p=>p.used&&p.ps.outs>0).sort((x,y)=>y.ps.outs-x.ps.outs)[0];
     if(rel) wp=rel;
   }
   const fin=wt.pitchers[wt.pIdx];
-  const sv=fin!==wp&&fin.ps.outs>0&&((fin.entryLead>=1&&fin.entryLead<=3)||fin.ps.outs>=9)?fin:null;
+  const sv=!same(fin,wp)&&fin.ps.outs>0&&((fin.entryLead>=1&&fin.entryLead<=3)||fin.ps.outs>=9)?fin:null;
   return {wp, lp, sv};
 }
 function recordGame(L, g){

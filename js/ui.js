@@ -38,7 +38,9 @@ $('#opTeams').onclick=e=>{const b=e.target.closest('.tbtn');if(!b||b.disabled)re
 $('#side').onclick=e=>{const b=e.target.closest('button');if(!b)return;pick.side=+b.dataset.v;renderSetup();};
 $('#mySP').onclick=e=>{const b=e.target.closest('.spbtn');if(!b)return;pick.sp=b.dataset.id;renderSetup();};
 $('#start').onclick=startGame;
-$('#quit').onclick=()=>{const season=G&&G.season; $('#subs').hidden=true; UI.wantSub=false; if(typeof playMusic==='function')playMusic('title'); G=null;UI.phase='setup';UI.defense=null;UI.intro=null;$('#field').classList.remove('in-intro');$('#intro').hidden=true;$('#skip').hidden=true;
+$('#quit').onclick=()=>{
+  if(netOn()&&!G.over){ if(confirm('離開連線對戰會判你輸，確定離開？')) netForfeit(); return; }   // online.js
+  const season=G&&G.season; $('#subs').hidden=true; UI.wantSub=false; if(typeof playMusic==='function')playMusic('title'); G=null;UI.phase='setup';UI.defense=null;UI.intro=null;$('#field').classList.remove('in-intro');$('#intro').hidden=true;$('#skip').hidden=true;
   // 聯賽中途離開：這場不算，之後可以重打
   if(season&&typeof openLeague==='function'){showHome(); openLeague();} else $('#setup').hidden=false;};
 $('#rosterBtn').onclick=()=>{renderRoster(teamOf(pick.me)); $('#roster').hidden=false;};
@@ -156,21 +158,30 @@ function showBatterBar(){
 }
 
 /* ---------- 流程 ---------- */
+/* 連線對戰（online.js 的 NET）：房主的遊戲負責判定每一球，算完把比賽狀態傳給對手；
+   雙方只送出自己的操作（投手：投出的球；打者：揮棒時機）。對手的操作放在 NET.inbox，輪到時才處理。 */
+const netOn=()=>typeof NET!=='undefined'&&NET.active&&!!G&&!!G.online;
+// 房主傳來的比賽狀態（副本）：換成這一份，再把「我是哪一隊」設回來
+function netApply(s){ G=s; G.human=NET.side; }
 function nextPitch(){
   if(!G) return;
   UI.defense=null;
+  if(netOn()) netBetweenPitches();       // 對手換投、房主傳來的新狀態，在兩球之間處理
   if(G.over) return showOver();
-  if(UI.wantSim){const w=UI.wantSim; UI.wantSim=false; if(w.h===G.half&&w.i===G.inning){UI.phase='choose'; return simHalf();}}
-  if(UI.wantSub){UI.wantSub=false; return openSubs();}
+  if(!netOn()){
+    if(UI.wantSim){const w=UI.wantSim; UI.wantSim=false; if(w.h===G.half&&w.i===G.inning){UI.phase='choose'; return simHalf();}}
+    if(UI.wantSub){UI.wantSub=false; return openSubs();}
+  }
   let wait=0;
-  if(!humanPit()){const np=aiBullpen(); if(np){log(`${fldTeam().short}更換投手：${np.name}（${np.role}）`); np.introduced=true; showPitcherCard(np,fldTeam(),'換投'); wait=1600;}}
+  if(!humanPit()&&!netOn()){const np=aiBullpen(); if(np){log(`${fldTeam().short}更換投手：${np.name}（${np.role}）`); np.introduced=true; showPitcherCard(np,fldTeam(),'換投'); wait=1600;}}
   const cp=curPitcher();
   if(!cp.introduced){cp.introduced=true; showPitcherCard(cp,fldTeam(),cp.role==='先發'?'先發投手':'換投'); wait=1600;}
   if(UI.newPA){UI.newPA=false;
-    const ms=aiSubs(); ms.forEach(m=>log(m)); if(ms.length){banner(ms[ms.length-1],'',1800); wait=Math.max(wait,1800);}
+    if(!netOn()){const ms=aiSubs(); ms.forEach(m=>log(m)); if(ms.length){banner(ms[ms.length-1],'',1800); wait=Math.max(wait,1800);}}
     showBatterBar(); wait=Math.max(wait,1300);}
   UI.swing=null; UI.aiSw=null; UI.pitch=null; UI.batAt=0; UI.hint=null;
   if(humanPit()){ UI.phase='choose'; if(UI.chosen>=curPitcher().pitches.length)UI.chosen=0; }
+  else if(netOn()){ UI.phase='remote'; UI.remoteWait=wait; netTryLaunch(); }   // 等對手投球
   else {
     const p=curPitcher(), b=curBatter(); const c=aiChoosePitch(p,b);
     const P=makePitch(p,c.idx,c.target,c.power,0);
@@ -187,9 +198,43 @@ function launch(P,aiSw,delay){
 }
 function finishPitch(){
   const P=UI.pitch, b=curBatter();
+  if(netOn()){
+    UI.phase='await'; UI.awaitP=P;
+    if(NET.role==='host'){ if(humanBat()) return netResolve(P,UI.swing||{type:'none'}); return netTryResolve(); }   // 對手打擊：等他的揮棒
+    if(humanBat()) NET.send('swing',{sw:UI.swing||{type:'none'}, pn:G.pn});
+    return netTryResult();                                                    // 等房主算出結果
+  }
   const sw=humanBat()?(UI.swing||{type:'none'}):UI.aiSw;
+  showResult(P,b,processPitch(P,sw));
+}
+// 房主：算出這一球的結果，連同比賽狀態傳給對手
+function netResolve(P,sw){
+  const b=curBatter(), o=processPitch(P,sw);
+  G.pn=(G.pn||0)+1; NET.send('result',{o, G, pn:G.pn});
+  showResult(P,b,o);
+}
+// 房主：自己的球飛完、對手的揮棒也到了，才判定
+function netTryResolve(){
+  const s=NET.inbox.swing;
+  if(UI.phase!=='await'||!s||s.pn!==(G.pn||0)) return;
+  NET.inbox.swing=null; netResolve(UI.awaitP,s.sw);
+}
+// 對手：自己的球飛完、房主的結果也到了，才顯示
+function netTryResult(){
+  const r=NET.inbox.result;
+  if(UI.phase!=='await'||!r||r.pn!==(G.pn||0)+1) return;
+  NET.inbox.result=null; const b=curBatter(); netApply(r.G); showResult(UI.awaitP,b,r.o);
+}
+// 輪到我打擊：對手投的球到了就開始飛
+function netTryLaunch(){
+  const m=NET.inbox.pitch;
+  if(UI.phase!=='remote'||!m||m.pn!==(G.pn||0)) return;
+  NET.inbox.pitch=null; const b=curBatter();
+  UI.hint=Math.random()<0.12+b.eye/99*0.55?m.P.name:null;
+  launch(m.P,null,Math.max(700,UI.remoteWait||0));
+}
+function showResult(P,b,o){
   const tag=`${G.half?'▼':'▲'}${G.inning}`;
-  const o=processPitch(P,sw);
   UI.marks.push({x:P.x,y:P.y,k:o.kind});
   UI.last=P; UI.lastMark={x:P.x,y:P.y,mph:P.mph,name:P.name,vaa:P.vaa,at:performance.now()};
   let msg=o.text; if(o.runs) msg+=`，得 ${o.runs} 分`;
@@ -245,6 +290,7 @@ function throwPitch(){
   const P=makePitch(p,UI.chosen,UI.aim,Math.max(0.3,UI.m.power/100),{dx:Math.cos(ang)*mag, dy:Math.sin(ang)*mag});
   P.meter = a<=h*0.35?'完美出手':a<=h?'準度良好':early?'出手太早・球偏高':'出手太晚・球偏低';
   P.meterBad = a>h;
+  if(netOn()){ NET.send('pitch',{P, pn:G.pn||0}); launch(P,null,420); return; }   // 連線：對手打擊
   launch(P,aiSwing(b,p,P),420);
 }
 function simHalf(){
@@ -272,13 +318,33 @@ function cycleCam(){const k=Object.keys(CAM_MODES); UI.camMode=k[(k.indexOf(UI.c
 $('#camBtn').textContent=`視角：${CAM_MODES[UI.camMode]}`;
 $('#camBtn').onclick=e=>{cycleCam(); e.currentTarget.blur();};
 // 下方能力卡點一下打開球員卡
-$('#pcard').onclick=()=>{if(G)openCard(curPitcher().id);};
-$('#bcard').onclick=()=>{if(G)openCard(curBatter().id);};
+// 連線對戰時對手的球員不在自己的聯盟裡（編號可能撞到別人），不開球員卡
+$('#pcard').onclick=()=>{if(G&&!netOn())openCard(curPitcher().id);};
+$('#bcard').onclick=()=>{if(G&&!netOn())openCard(curBatter().id);};
 $('#swn').onclick=()=>doSwing('normal'); $('#swp').onclick=()=>doSwing('power');
 $('#chg').onclick=()=>{ if(!G||!humanPit())return; const b=$('#bull'); b.hidden=!b.hidden; };
 $('#bull').onclick=e=>{const btn=e.target.closest('button[data-p]'); if(!btn||!['choose','aim','ready'].includes(UI.phase))return; const t=fldTeam(), i=+btn.dataset.p;
+  $('#bull').hidden=true;
+  if(netOn()&&NET.role==='guest'){ NET.send('change',{i}); UI.phase='wait'; banner('換投中…','',1200); renderAll(); return; }   // 由房主換好再傳回來
+  if(netOn()) return netHostChange(i);
   changePitcher(t,i); log(`${t.short}更換投手：${t.pitchers[i].name}（${t.pitchers[i].role}）`); UI.chosen=0;
-  t.pitchers[i].introduced=true; showPitcherCard(t.pitchers[i],t,'換投'); UI.phase='choose'; $('#bull').hidden=true; renderAll();};
+  t.pitchers[i].introduced=true; showPitcherCard(t.pitchers[i],t,'換投'); UI.phase='choose'; renderAll();};
+// 連線：房主換投（自己換、或對手要求換），換好把比賽狀態傳過去
+function netHostChange(i){
+  const t=fldTeam(), p=t.pitchers[i]; if(!p||p.used) return;
+  changePitcher(t,i); p.introduced=true;
+  const msg=`${t.short}更換投手：${p.name}（${p.role}）`; log(msg); showPitcherCard(p,t,'換投');
+  if(humanPit()){UI.chosen=0; UI.phase='choose';}
+  NET.send('state',{G, msg, card:i}); renderAll();
+}
+// 兩球之間：房主處理對手的換投要求；對手套用房主傳來的新狀態
+function netBetweenPitches(){
+  if(NET.role==='host'&&NET.inbox.change!=null){const i=NET.inbox.change; NET.inbox.change=null; netHostChange(i);}
+  if(NET.role==='guest'&&NET.inbox.state){const s=NET.inbox.state; NET.inbox.state=null; netApply(s.G);
+    if(s.msg){log(s.msg); const t=fldTeam(), p=t.pitchers[s.card]; if(p) showPitcherCard(p,t,'換投');}
+    if(humanPit()&&UI.phase==='wait'){UI.chosen=0; UI.phase='choose';}
+    renderAll();}
+}
 
 /* ---------- 換人：進攻時代打、代跑；守備時換守備、對調守位 ----------
    只能在兩球之間換：自己投球時是選球種到出手前；打擊時是對方投手開始投球前，來不及就排到這球結束後。 */
@@ -408,7 +474,9 @@ function renderOverlay(){
   }
   const t=fldTeam(), bp=t.pitchers.map((x,i)=>({x,i})).filter(o=>!o.x.used);
   $('#chg').disabled=!humanPit()||!bp.length;
-  $('#subBtn').disabled=G.over||UI.phase==='intro'||!G.teams[G.human].bench.length;
+  $('#subBtn').disabled=netOn()||G.over||UI.phase==='intro'||!G.teams[G.human].bench.length;   // 連線對戰先不開放換人
+  $('#simb').disabled=netOn();                                                                       // 也不能自動模擬
+  if(netOn()&&(UI.phase==='remote'||UI.phase==='await'||UI.phase==='wait')) $('#help').textContent=UI.phase==='remote'?'等待對手投球…':UI.phase==='await'?'等待對手…':'等待對手確認換投…';
   $('#bull').innerHTML=bp.map(o=>`<button data-p="${o.i}"><b>${o.x.name}（${o.x.role}）</b><span>最快 ${topMph(o.x.velo)} mph · 控球 ${o.x.ctrl} · ${o.x.pitches.map(z=>z.n).join('、')}</span></button>`).join('');
   if(!humanPit())$('#bull').hidden=true;
 }
@@ -446,17 +514,22 @@ function showOver(e){
   const dec=gameDecisions(G);
   const decTxt=[['勝投',dec.wp],['敗投',dec.lp],['救援',dec.sv]].filter(x=>x[1]).map(([l,p])=>`${l}：${p.name}`).join('　');
   // 比賽獎勵（home.js 的金幣系統）；聯賽的比賽另外寫入賽程、累積排行榜成績（finishSeasonGame）。只算一次
-  const result=e==='tie'?'tie':won?'win':'loss', season=G.season;
-  if(G.reward===undefined) G.reward=season?(typeof finishSeasonGame==='function'?finishSeasonGame(G,result):'')
+  const result=e==='tie'||a===h?'tie':won?'win':'loss', season=G.season, online=netOn();
+  if(G.reward===undefined) G.reward=online?(typeof onlineGameOver==='function'?onlineGameOver(result):'')
+    :season?(typeof finishSeasonGame==='function'?finishSeasonGame(G,result):'')
     :typeof awardGame==='function'?awardGame(result,G.teams[1-G.human].lv||1,G.tier||0,G.teams[G.human].lv||1):'';
   const reward=G.reward;
-  $('#overBody').innerHTML=`<h1>${title}${e==='walkoff'?'（再見分）':''}</h1>${season?`<p class="over-tag">${season.label}</p>`:''}<div class="final">${G.teams[0].short} ${a} : ${h} ${G.teams[1].short}</div>
+  const tag=online?`連線對戰・對手 ${esc(NET.opp&&NET.opp.name||'')}`:season?season.label:'';
+  $('#overBody').innerHTML=`<h1>${result==='tie'?'和局':title}${e==='walkoff'?'（再見分）':''}</h1>${tag?`<p class="over-tag">${tag}</p>`:''}<div class="final">${G.teams[0].short} ${a} : ${h} ${G.teams[1].short}</div>
     ${decTxt?`<p class="dec">${decTxt}</p>`:''}${reward?`<p class="reward">${reward}</p>`:''}${box(0)}${box(1)}
-    <div class="over-btns"><button class="go" id="again">${season?'回到聯賽':'再來一場'}</button><button class="ghost" id="overHome">回主選單</button></div>`;
+    <div class="over-btns"><button class="go" id="again">${online?'回到連線大廳':season?'回到聯賽':'再來一場'}</button><button class="ghost" id="overHome">回主選單</button></div>`;
   $('#over').hidden=false;
-  if(typeof playJingle==='function'){ stopMusic(); e==='tie'?playMusic('title'):playJingle(won?'win':'lose',()=>playMusic('title')); }
+  if(typeof playJingle==='function'){ stopMusic(); result==='tie'?playMusic('title'):playJingle(won?'win':'lose',()=>playMusic('title')); }
   $('#again').onclick=()=>{$('#over').hidden=true;G=null;UI.phase='setup';
-    if(season&&typeof openLeague==='function'){showHome(); openLeague();} else {renderSetup();$('#setup').hidden=false;}};
+    if(online){netLeave(); showHome(); openOnline();}
+    else if(season&&typeof openLeague==='function'){showHome(); openLeague();} else {renderSetup();$('#setup').hidden=false;}};
+  if(online) $('#overHome').onclick=()=>{$('#over').hidden=true;G=null;UI.phase='setup'; netLeave(); showHome();};
+  else
   $('#overHome').onclick=()=>{$('#over').hidden=true;G=null;UI.phase='setup';if(typeof showHome==='function')showHome();};
 }
 

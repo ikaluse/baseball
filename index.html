@@ -156,7 +156,7 @@
 <script>
 // 依序載入程式；db.js 會非同步開啟球員資料庫，等 window.DB_READY 完成才載入介面
 (function(){
-  var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js'];
+  var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js','online.js'];
   function fail(f){
     var d=document.querySelector('#setup .dialog');
     d.insertAdjacentHTML('afterbegin','<p style="background:#e45050;color:#fff;padding:10px 12px;border-radius:4px;margin:0 0 12px">找不到 js/'+f+
