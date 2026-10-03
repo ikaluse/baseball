@@ -12,7 +12,7 @@
 <!-- 雲端同步（Supabase）；js/cloud-config.js 沒填設定時不會用到 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
-<body>
+<body class="booting">
 <!-- 登入與主選單（home.js） -->
 <div class="home" id="home">
   <canvas id="homeBg" aria-hidden="true"></canvas>
@@ -22,6 +22,7 @@
       <div class="ttl-sub">PITCHER <b>VS</b> BATTER</div>
       <h1 class="ttl-main"><span>投打</span><span>對決</span></h1>
       <p class="ttl-tag">燃燒吧！九局的熱血對決</p>
+      <p class="boot-msg">載入中…</p>
     </header>
     <section class="panel" id="login">
       <h2>玩家登入</h2>
@@ -158,12 +159,12 @@
 (function(){
   var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js','online.js'];
   function fail(f){
-    var d=document.querySelector('#setup .dialog');
-    d.insertAdjacentHTML('afterbegin','<p style="background:#e45050;color:#fff;padding:10px 12px;border-radius:4px;margin:0 0 12px">找不到 js/'+f+
-      '。請確認 index.html 旁邊的 js 資料夾裡有 '+files.join('、')+'。</p>');
+    var m=document.querySelector('.boot-msg');
+    m.style.animation='none'; m.style.letterSpacing='0'; m.style.color='#ffb4b4';
+    m.textContent='載入失敗：找不到 js/'+f+'。請重新整理；直接開檔案的話，確認 index.html 旁邊的 js 資料夾裡有 '+files.join('、')+'。';
   }
   function load(i){
-    if(i>=files.length) return;
+    if(i>=files.length){ document.body.classList.remove('booting'); return; }   // 全部載入完才顯示登入／主選單，不會先閃過還沒準備好的畫面
     var s=document.createElement('script'); s.src='js/'+files[i];
     s.onload=function(){ Promise.resolve(files[i]==='db.js'?window.DB_READY:null).then(function(){ load(i+1); }); };
     s.onerror=function(){ fail(files[i]); };

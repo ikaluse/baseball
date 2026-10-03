@@ -803,3 +803,9 @@ button:focus-visible{outline:3px solid var(--hi);outline-offset:2px;}
 .net-spin{width:42px;height:42px;margin:0 auto 10px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);animation:netspin 1s linear infinite;}
 @keyframes netspin{to{transform:rotate(360deg)}}
 @media (max-width:520px){.net-ps{grid-template-columns:1fr;} .net-vs{text-align:center;}}
+
+/* 開頁載入中：程式還沒全部載入前不顯示登入表單與主選單（避免先閃過舊的登入畫面） */
+.boot-msg{display:none;}
+.booting .boot-msg{display:block;text-align:center;margin-top:28px;font-weight:700;letter-spacing:.2em;opacity:.8;animation:bootpulse 1.2s ease-in-out infinite;}
+.booting #login,.booting #menu{display:none!important;}
+@keyframes bootpulse{50%{opacity:.35}}
