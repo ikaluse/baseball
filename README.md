@@ -20,7 +20,8 @@ baseball/
 │   ├── admin.js    管理員：修改球員、球隊、玩家帳號、SQL 主控台
 │   ├── cloud-config.js  雲端同步設定（Supabase 的網址與 anon key）
 │   ├── cloud.js    雲端同步：帳號登入、自動上傳下載、衝突處理
-│   └── online.js   連線對戰：房間、隨機配對、即時傳輸
+│   ├── online.js   連線對戰：房間、隨機配對、即時傳輸
+│   └── practice.js 打擊練習：面對電腦投手打 10 球，依成績拿金幣
 ├── data/
 │   ├── players.sqlite   球員資料庫（1500 人）
 │   └── players_db.js    同一份資料庫的 base64（給瀏覽器直接讀）
@@ -34,7 +35,7 @@ baseball/
 └── ref_mvp2005/    MVP Baseball 2005 影片的參考截圖
 ```
 
-載入順序固定為 `engine.js → render.js → db.js → cards.js → ui.js → trade.js → audio.js → home.js → admin.js → cloud-config.js → cloud.js → online.js`，檔案之間共用全域變數。
+載入順序固定為 `engine.js → render.js → db.js → cards.js → ui.js → trade.js → audio.js → home.js → admin.js → cloud-config.js → cloud.js → online.js → practice.js`，檔案之間共用全域變數。
 `db.js` 開資料庫是非同步的，`index.html` 會等它完成才載入後面的檔案。
 存檔與 sql.js 都需要瀏覽器；sql.js 從 cdnjs 載入，第一次開啟需要網路。
 
@@ -181,6 +182,17 @@ baseball/
   - 每個難度的勝場記在玩家檔案的 `tierW`。選的難度記在 `tier`。
   - 舊玩家第一次載入時依過去的勝場換算積分（每勝 10 分）。管理員可以在「玩家帳號」修改積分。
 - **金幣獎勵**：贏球多拿「對手等級 × 10」金幣（`home.js` 的 `WIN_PER_LV`），所以難度越高金幣也越多。
+
+## 打擊練習
+
+球員管理 → 打擊練習（`js/practice.js`）。選一位一軍打者，面對電腦投手打 10 球；用一般比賽的畫面和揮棒操作。
+
+- **投手難度**：和電腦難度同一套 7 級（普通～神話，`engine.js` 的 `AI_TIERS`），積分突破到那一級才能練那一級。投手調到那一級的等級、能力上限（含球速）也照那個稀有度。
+- **每一球都是新的打席**：壘上清空、球數隨機（最多 2 壞 1 好，不會三振或保送，電腦才會依球數換配球）。投手不會累、也不會被換下。
+- **計分**：全壘打 10、三壘安打 6、二壘安打 5、一壘安打 3、強勁的出局（擊球初速 95 mph 以上）1、壞球沒揮 1，其他 0。評價 S 60 分以上、A 40、B 25、C 12。
+- **金幣**＝總分 × 每分金幣：普通 3、精良 4、稀有 6、完美 8、史詩 11、傳說 15、神話 20（`PRACTICE_COIN`）。
+- 每天前 5 次有金幣（`PRACTICE_DAILY`），之後還能練但不給金幣；中途離開不算次數、也沒有金幣。
+- 各難度的最佳分數記在玩家檔案的 `practiceBest`；練習不會寫進聯賽、排行榜或球員資料。
 
 ## 一鍵處理
 

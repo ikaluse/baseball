@@ -349,6 +349,7 @@ function renderManage(){
         <button class="hub-b" data-hub="db"><b>球員資料庫</b><span>瀏覽全聯盟 ${Object.keys(LEAGUE.players).length.toLocaleString()} 名球員的球員卡</span></button>
         <button class="hub-b" data-hub="roster"><b>球隊名單</b><span>一軍打序、輪值、牛棚與二軍</span></button>
         <button class="hub-b hot" data-hub="train"><b>球員訓練</b><span>指定一項能力加強，總評上限是潛力</span></button>
+        <button class="hub-b hot" data-hub="practice"><b>打擊練習</b><span>面對電腦投手打 10 球，依成績拿金幣；難度照積分等級開放</span></button>
         <button class="hub-b hot" data-hub="enhance"><b>球員強化</b><span>+1～+${ENH_MAX}，全部能力與潛力一起提升</span></button>
         <button class="hub-b auto" data-hub="optimize"><b>一鍵配置陣容</b><span>最強 26 人上一軍，自動排打序、守備、輪值與牛棚</span></button>
         <button class="hub-b hot" data-hub="synth"><b>球員合成</b><span>同稀有度 ${SYNTH_N} 張合成 1 張，稀有度升一級</span></button>
@@ -357,6 +358,7 @@ function renderManage(){
     return;
   }
   if(TM.view==='leaders') return renderLeaders();
+  if(TM.view==='practice') return renderPractice();   // practice.js
   if(TM.view==='synth') return renderSynth();
   if(TM.view==='optimize') return renderOptimize();
   const ids=[...t.roster,...t.farm].filter(id=>TM.kind==='all'||LEAGUE.players[id].kind===TM.kind).sort((a,b)=>P_(b).ovr-P_(a).ovr);

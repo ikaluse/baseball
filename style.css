@@ -809,3 +809,16 @@ button:focus-visible{outline:3px solid var(--hi);outline-offset:2px;}
 .booting .boot-msg{display:block;text-align:center;margin-top:28px;font-weight:700;letter-spacing:.2em;opacity:.8;animation:bootpulse 1.2s ease-in-out infinite;}
 .booting #login,.booting #menu{display:none!important;}
 @keyframes bootpulse{50%{opacity:.35}}
+
+/* 打擊練習 */
+.pr-tiers .tierbtn small{display:block;font-size:10.5px;opacity:.8;margin-top:2px;}
+.pr-bat{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px;margin:6px 0 10px;}
+.pr-bat button{display:flex;flex-direction:column;gap:2px;text-align:left;padding:7px 10px;border-radius:5px;border:2px solid var(--line);background:var(--btn);color:var(--btn-ink);}
+.pr-bat button span{font-size:11.5px;color:var(--muted);}
+.pr-bat button.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.pr-rates{max-width:220px;margin:6px 0 12px;}
+.pr-grade{display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 10px;}
+.pr-grade b{font:900 64px/1 var(--num);color:#ffd84a;text-shadow:0 0 18px rgba(255,190,60,.6);}
+.pr-grade span{font:700 22px var(--num);}
+.pr-grade.g-C b,.pr-grade.g-D b{color:#c9ced6;text-shadow:none;}
+.pr-log{margin:8px auto;max-width:460px;} .pr-log td,.pr-log th{text-align:center;}

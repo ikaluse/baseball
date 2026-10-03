@@ -40,6 +40,7 @@ $('#mySP').onclick=e=>{const b=e.target.closest('.spbtn');if(!b)return;pick.sp=b
 $('#start').onclick=startGame;
 $('#quit').onclick=()=>{
   if(netOn()&&!G.over){ if(confirm('離開連線對戰會判你輸，確定離開？')) netForfeit(); return; }   // online.js
+  if(G&&G.practice){ if(confirm('結束這次打擊練習？這次不會拿到金幣。')) practiceQuit(); return; }      // practice.js
   const season=G&&G.season; $('#subs').hidden=true; UI.wantSub=false; if(typeof playMusic==='function')playMusic('title'); G=null;UI.phase='setup';UI.defense=null;UI.intro=null;$('#field').classList.remove('in-intro');$('#intro').hidden=true;$('#skip').hidden=true;
   // 聯賽中途離開：這場不算，之後可以重打
   if(season&&typeof openLeague==='function'){showHome(); openLeague();} else $('#setup').hidden=false;};
@@ -253,7 +254,9 @@ function showResult(P,b,o){
   } else {
     UI.phase='result'; UI.nextAt=performance.now()+(o.done?1400:950);
   }
+  if(G.practice&&typeof practiceRecord==='function') practiceRecord(P,o);   // 打擊練習：每一球計分（practice.js）
   UI.after=()=>{
+    if(G.practice) return practiceAfter(o);                                   // 打擊練習：不算打席，下一球重新開始
     if(o.done){
       const e=endPA(); UI.marks=[]; UI.newPA=true;
       if(G.over){renderAll(); return showOver(e);}
@@ -447,7 +450,8 @@ function renderPlate(){
   const b=curBatter(), bt=batTeam(), st=b.st;
   $('#plate').innerHTML=`<div class="nm">${bt.bIdx+1}. ${b.name}<small>${POS_NAME[b.pos]}·${b.bats==='R'?'右打':'左打'}</small></div>
     <div class="chips"><span><i>力量</i>${b.pow}</span><span><i>技巧</i>${b.con}</span><span><i>速度</i>${b.spd}</span></div>`;
-  $('#today').textContent=st.pa?`今日 ${st.ab} 打數 ${st.h} 安打${st.hr?`，${st.hr} 轟`:''}${st.rbi?`，${st.rbi} 打點`:''}`:'今日第一個打席';
+  $('#today').textContent=G.practice?`打擊練習 第 ${Math.min(G.practice.n+1,G.practice.total)}／${G.practice.total} 球・得分 ${G.practice.score}`
+    :st.pa?`今日 ${st.ab} 打數 ${st.h} 安打${st.hr?`，${st.hr} 轟`:''}${st.rbi?`，${st.rbi} 打點`:''}`:'今日第一個打席';
   const p=curPitcher();
   $('#pinfo').innerHTML=`<b>${p.name}</b> ${fldTeam().short}·${p.throws==='R'?'右投':'左投'}<span>用球數 ${p.pc}　最快 ${topMph(p.velo)} mph　控球 ${p.ctrl}</span>`;
 }
@@ -474,8 +478,8 @@ function renderOverlay(){
   }
   const t=fldTeam(), bp=t.pitchers.map((x,i)=>({x,i})).filter(o=>!o.x.used);
   $('#chg').disabled=!humanPit()||!bp.length;
-  $('#subBtn').disabled=netOn()||G.over||UI.phase==='intro'||!G.teams[G.human].bench.length;   // 連線對戰先不開放換人
-  $('#simb').disabled=netOn();                                                                       // 也不能自動模擬
+  $('#subBtn').disabled=netOn()||!!G.practice||G.over||UI.phase==='intro'||!G.teams[G.human].bench.length;   // 連線對戰、打擊練習不開放換人
+  $('#simb').disabled=netOn()||!!G.practice;                                                                       // 也不能自動模擬
   if(netOn()&&(UI.phase==='remote'||UI.phase==='await'||UI.phase==='wait')) $('#help').textContent=UI.phase==='remote'?'等待對手投球…':UI.phase==='await'?'等待對手…':'等待對手確認換投…';
   $('#bull').innerHTML=bp.map(o=>`<button data-p="${o.i}"><b>${o.x.name}（${o.x.role}）</b><span>最快 ${topMph(o.x.velo)} mph · 控球 ${o.x.ctrl} · ${o.x.pitches.map(z=>z.n).join('、')}</span></button>`).join('');
   if(!humanPit())$('#bull').hidden=true;
