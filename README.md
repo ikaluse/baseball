@@ -21,12 +21,15 @@ baseball/
 │   ├── cloud-config.js  雲端同步設定（Supabase 的網址與 anon key）
 │   ├── cloud.js    雲端同步：帳號登入、自動上傳下載、衝突處理
 │   ├── online.js   連線對戰：房間、隨機配對、即時傳輸
-│   └── practice.js 打擊練習：面對電腦投手打 10 球，依成績拿金幣
+│   ├── practice.js 打擊練習：面對電腦投手打 10 球，依成績拿金幣
+│   └── market.js   玩家市場：雲端玩家之間掛賣球員卡
 ├── data/
 │   ├── players.sqlite   球員資料庫（1500 人）
 │   └── players_db.js    同一份資料庫的 base64（給瀏覽器直接讀）
 ├── supabase/
-│   └── schema.sql  雲端存檔的資料表與權限（貼到 Supabase 的 SQL Editor 執行）
+│   ├── schema.sql  雲端存檔的資料表與權限（貼到 Supabase 的 SQL Editor 執行）
+│   ├── admin.sql   管理員權限
+│   └── market.sql  玩家市場的資料表與買賣函式
 ├── tools/
 │   ├── sim.js           用 Node.js 跑 AI 對 AI 模擬，檢查數值平衡
 │   ├── build-db.cjs     產生 data/ 裡的球員資料庫
@@ -35,7 +38,7 @@ baseball/
 └── ref_mvp2005/    MVP Baseball 2005 影片的參考截圖
 ```
 
-載入順序固定為 `engine.js → render.js → db.js → cards.js → ui.js → trade.js → audio.js → home.js → admin.js → cloud-config.js → cloud.js → online.js → practice.js`，檔案之間共用全域變數。
+載入順序固定為 `engine.js → render.js → db.js → cards.js → ui.js → trade.js → audio.js → home.js → admin.js → cloud-config.js → cloud.js → online.js → practice.js → market.js`，檔案之間共用全域變數。
 `db.js` 開資料庫是非同步的，`index.html` 會等它完成才載入後面的檔案。
 存檔與 sql.js 都需要瀏覽器；sql.js 從 cdnjs 載入，第一次開啟需要網路。
 
@@ -182,6 +185,21 @@ baseball/
   - 每個難度的勝場記在玩家檔案的 `tierW`。選的難度記在 `tier`。
   - 舊玩家第一次載入時依過去的勝場換算積分（每勝 10 分）。管理員可以在「玩家帳號」修改積分。
 - **金幣獎勵**：贏球多拿「對手等級 × 10」金幣（`home.js` 的 `WIN_PER_LV`），所以難度越高金幣也越多。
+
+## 玩家市場
+
+交易市場 →「玩家市場」分頁（`js/market.js`、`supabase/market.sql`）。雲端玩家之間用金幣買賣球員卡；要登入雲端帳號。
+
+- **掛賣**：選自己的一張卡、定價（100～9,999,999 金幣）。卡片先從自己的球隊移出、存檔，再交給雲端託管；雲端拒絕就放回來，不會一張卡同時在兩邊。同時最多 5 張；賣掉後球隊的野手、投手都還要各有 13 人以上。
+- **逛市場、購買**：依類型、稀有度、姓名篩選，依最新、價格、總評排序；點姓名看球員卡。買下的卡放進二軍（換一個這個聯盟沒用過的編號，背號撞號自動換），名單滿了不能買。
+- **成交**：資料庫的 `market_buy` 一次把掛單標成已賣出，同一張卡不會被兩個人買到。
+- **收款、退回**：賣家下次打開交易市場或登入時，自動收款（扣 5% 手續費）；取消或 7 天沒賣掉的卡退回二軍。處理過的項目記在玩家檔案的 `mktDone`，雲端也標成已處理（`market_ack`），網路斷掉也不會重複拿。
+- **好友交易**：每位玩家有一組玩家代碼（帳號 id 前 8 碼，顯示在玩家市場上方）。掛賣時填朋友的代碼，就只有他看得到、買得到；兩個人互相指定掛賣就等於交易。
+- 權限：玩家看不到別人指定給其他人的掛單，也不能直接改資料表，只能呼叫 `market_sell／market_buy／market_cancel／market_pending／market_ack`。
+
+**設定**：在 Supabase 的 SQL Editor 執行一次 `supabase/market.sql`（要先執行過 `schema.sql`）。沒執行的話玩家市場會顯示讀取失敗、提示先執行。
+
+**限制**：金幣存在每位玩家自己的存檔裡，懂開發者工具的人可以改自己的金幣；要完全防作弊得把金幣也搬到伺服器管。
 
 ## 打擊練習
 

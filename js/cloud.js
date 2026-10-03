@@ -293,7 +293,8 @@ document.addEventListener('click',e=>{
     if(!CLOUD.admin){ sessionStorage.removeItem(ADMIN_VIEW); await idbDel(leagueKey('adminview:'+CLOUD.view.uid)).catch(()=>{}); location.reload(); return; }
     $('#menu').hidden=true; openAdmin('players'); return;
   }
-  if(session){ CLOUD.user=session.user; renderMenu(); await cloudEnter(); cloudCheckAdmin(); }
+  if(session){ CLOUD.user=session.user; renderMenu(); await cloudEnter(); cloudCheckAdmin();
+    if(typeof marketSync==='function') setTimeout(()=>marketSync(),1500); }   // 玩家市場：收款、收卡（market.js）
   else if(isCloudKey(PROFILES.current)){ PROFILES.current=null; saveProfiles(); showHome(); }   // 雲端登入過期：回登入頁
   // 切回這個視窗、恢復網路、每分鐘：檢查別台電腦的新進度、補傳沒傳成功的變動
   document.addEventListener('visibilitychange',()=>{ if(!cloudOn()) return;

@@ -822,3 +822,17 @@ button:focus-visible{outline:3px solid var(--hi);outline-offset:2px;}
 .pr-grade span{font:700 22px var(--num);}
 .pr-grade.g-C b,.pr-grade.g-D b{color:#c9ced6;text-shadow:none;}
 .pr-log{margin:8px auto;max-width:460px;} .pr-log td,.pr-log th{text-align:center;}
+
+/* 玩家市場 */
+.mk-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:4px 0 8px;}
+.mk-top .tr-tip{margin:0;}
+.mk-code{font:700 17px var(--num);letter-spacing:.12em;color:var(--accent);margin:0 6px;}
+.mk-views{margin:6px 0 8px;}
+.mk-ctl{flex-wrap:wrap;}
+.mk-t td.mk-price,.mk-price{font-family:var(--num);font-weight:700;color:#ffd84a;white-space:nowrap;}
+.mk-price small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;}
+.mk-priv{font-style:normal;font-size:10.5px;padding:0 5px;border-radius:3px;background:#3fb26b;color:#04210f;margin-left:4px;}
+.mk-t .hot-btn.sm{width:auto;padding:4px 12px;font-size:13px;letter-spacing:.1em;}
+.mk-f{display:flex;flex-direction:column;gap:4px;margin:10px 0 0;font-weight:700;font-size:13px;}
+.mk-f input{padding:7px 8px;font-size:15px;}
+.mk-t .up{color:#3fb26b;} .mk-t .dn{color:#ffb4b4;}

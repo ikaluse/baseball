@@ -24,13 +24,13 @@ function renderTrade(){
 }
 function drawTrade(){
   const t=myTeam(), pay=payroll(LEAGUE,t);
-  const tabs=[['trade','交易'],['fa','自由球員'],['roster','名單管理'],['log','交易紀錄']];
+  const tabs=[['trade','交易'],['fa','自由球員'],['roster','名單管理'],['log','交易紀錄'],['market','玩家市場']];   // 玩家市場在 market.js
   $('#tradeHd').innerHTML=`<h1><i class="dot" style="background:${t.color}"></i>交易市場<small>${t.name}</small></h1>
     <div class="tr-stat"><span>名單 <b>${t.roster.length}</b> 一軍＋<b>${t.farm.length}</b> 二軍／上限 ${ROSTER_MAX}</span>
       <span>薪資 <b>${money(pay)}</b>／上限 ${money(SALARY_CAP)}</span><span class="cap"><i style="width:${Math.min(100,pay/SALARY_CAP*100)}%"></i></span></div>
     <div class="tr-tabs">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${TR.tab===k?'sel':''}">${l}</button>`).join('')}</div>
     ${TR.note?`<p class="tr-note ${TR.note.ok?'ok':'bad'}">${TR.note.msg}</p>`:''}`;
-  ({trade:renderTradeTab, fa:renderFATab, roster:renderRosterTab, log:renderLogTab})[TR.tab]();
+  ({trade:renderTradeTab, fa:renderFATab, roster:renderRosterTab, log:renderLogTab, market:renderMarketTab})[TR.tab]();
 }
 
 // 球員列：勾選框、姓名（點了看球員卡）、位置、總評、潛力、年齡、年薪、一二軍、交易價值
