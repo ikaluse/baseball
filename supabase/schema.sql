@@ -1,4 +1,4 @@
--- 投打對決：雲端存檔資料表（在 Supabase 專案的 SQL Editor 貼上執行一次）
+-- 速球王：雲端存檔資料表（在 Supabase 專案的 SQL Editor 貼上執行一次）
 -- 一個帳號一列：profile＝玩家資料（金幣、積分、設定…），league＝整個聯盟（SQLite 壓縮後的 base64）
 -- rev 每次上傳 +1，用來發現「兩台電腦同時改過」的衝突
 

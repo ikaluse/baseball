@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>投打對決</title>
+<title>速球王</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#1a0306">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <!-- ?v=版本：每次更新網站時由 tools/stamp-version.cjs 改掉，瀏覽器才會抓新的檔案而不是用快取的舊檔 -->
-<link rel="stylesheet" href="style.css?v=202610031837">
+<link rel="stylesheet" href="style.css?v=202610031843">
 <!-- sql.js：在瀏覽器裡開 SQLite 球員資料庫；沒有網路時遊戲會改用內建產生器 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <!-- 雲端同步（Supabase）；js/cloud-config.js 沒填設定時不會用到 -->
@@ -20,8 +22,8 @@
   <button class="snd-btn" data-snd>♪ 音樂：開</button>
   <div class="home-in">
     <header class="ttl">
-      <div class="ttl-sub">PITCHER <b>VS</b> BATTER</div>
-      <h1 class="ttl-main"><span>投打</span><span>對決</span></h1>
+      <div class="ttl-sub">LET'S PLAY <b>BALL!!</b></div>
+      <h1 class="ttl-main"><span>速球</span><span>王</span></h1>
       <p class="ttl-tag">燃燒吧！九局的熱血對決</p>
       <p class="boot-msg">載入中…</p>
     </header>
@@ -102,7 +104,7 @@
 
 <div class="overlay" id="setup" hidden>
   <div class="dialog">
-    <h1>投打對決</h1>
+    <h1>速球王</h1>
     <p class="lead">選一支球隊，你負責投球和打擊，守備由系統自動處理。</p>
     <h2>我的球隊</h2>
     <div class="teams" id="myTeams"></div>
@@ -154,11 +156,11 @@
 <div class="overlay top" id="cloudDlg" hidden><div class="dialog" id="cloudDlgBody"></div></div>
 <div class="overlay top" id="cardm" hidden><div class="cardwrap" id="cardBody"></div></div>
 
-<script src="data/players_db.js?v=202610031837"></script>
+<script src="data/players_db.js?v=202610031843"></script>
 <script>
 // 依序載入程式；db.js 會非同步開啟球員資料庫，等 window.DB_READY 完成才載入介面
 (function(){
-  var V='202610031837';   // 和上面 style.css?v= 一樣，由 tools/stamp-version.cjs 更新
+  var V='202610031843';   // 和上面 style.css?v= 一樣，由 tools/stamp-version.cjs 更新
   var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js','online.js','practice.js'];
   function fail(f){
     var m=document.querySelector('.boot-msg');

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 速球王圖示：燃燒的棒球（和登入頁背景的火焰棒球同一個意象） -->
+  <defs>
+    <radialGradient id="fire" cx="70%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#ffd84a"/>
+      <stop offset=".45" stop-color="#ff6a1a"/>
+      <stop offset="1" stop-color="#b3121c"/>
+    </radialGradient>
+    <radialGradient id="ball" cx="38%" cy="34%" r="70%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e3d8c6"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#1a0306"/>
+  <!-- 火焰尾巴（往右上） -->
+  <path d="M30 40 C 40 30, 50 22, 62 6 C 54 22, 50 30, 44 40 C 52 34, 58 30, 63 24 C 56 38, 48 46, 36 50 Z" fill="url(#fire)"/>
+  <!-- 棒球 -->
+  <circle cx="26" cy="38" r="20" fill="url(#ball)" stroke="#5a0a00" stroke-width="2"/>
+  <path d="M12.5 27.5 C 19 33, 19 43, 12.5 48.5" fill="none" stroke="#d2232a" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M39.5 27.5 C 33 33, 33 43, 39.5 48.5" fill="none" stroke="#d2232a" stroke-width="2.6" stroke-linecap="round"/>
+  <g stroke="#d2232a" stroke-width="1.6" stroke-linecap="round">
+    <path d="M14 31 l3 -1.5 M16 36 l3 -.5 M16 41 l3 .5 M14 46 l3 1.5"/>
+    <path d="M38 31 l-3 -1.5 M36 36 l-3 -.5 M36 41 l-3 .5 M38 46 l-3 1.5"/>
+  </g>
+</svg>
