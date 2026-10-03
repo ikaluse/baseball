@@ -6,7 +6,8 @@
 <title>投打對決</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<!-- ?v=版本：每次更新網站時由 tools/stamp-version.cjs 改掉，瀏覽器才會抓新的檔案而不是用快取的舊檔 -->
+<link rel="stylesheet" href="style.css?v=202610031816">
 <!-- sql.js：在瀏覽器裡開 SQLite 球員資料庫；沒有網路時遊戲會改用內建產生器 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <!-- 雲端同步（Supabase）；js/cloud-config.js 沒填設定時不會用到 -->
@@ -153,10 +154,11 @@
 <div class="overlay top" id="cloudDlg" hidden><div class="dialog" id="cloudDlgBody"></div></div>
 <div class="overlay top" id="cardm" hidden><div class="cardwrap" id="cardBody"></div></div>
 
-<script src="data/players_db.js"></script>
+<script src="data/players_db.js?v=202610031816"></script>
 <script>
 // 依序載入程式；db.js 會非同步開啟球員資料庫，等 window.DB_READY 完成才載入介面
 (function(){
+  var V='202610031816';   // 和上面 style.css?v= 一樣，由 tools/stamp-version.cjs 更新
   var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js','online.js'];
   function fail(f){
     var m=document.querySelector('.boot-msg');
@@ -165,7 +167,7 @@
   }
   function load(i){
     if(i>=files.length){ document.body.classList.remove('booting'); return; }   // 全部載入完才顯示登入／主選單，不會先閃過還沒準備好的畫面
-    var s=document.createElement('script'); s.src='js/'+files[i];
+    var s=document.createElement('script'); s.src='js/'+files[i]+'?v='+V;
     s.onload=function(){ Promise.resolve(files[i]==='db.js'?window.DB_READY:null).then(function(){ load(i+1); }); };
     s.onerror=function(){ fail(files[i]); };
     document.body.appendChild(s);
