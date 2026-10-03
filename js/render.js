@@ -537,16 +537,13 @@ function drawPitcher(now){
   shadowAt(0,60.5-(ph>0.7?1.8:0.2),1.5);
   drawRig(chibiRig(J),{...lookFor(t,p,home),glove:'B',toe:0,...(pitcherView()?{noFace:true,back:1}:{})});
 }
-// 球的位置（t=0 出手、t=1 通過本壘板）。以「出手點到進壘點的直線」為基準，加上：
-//  • 變化：bx/by·(t^late − t)，前段幾乎不動、最後一段才跑出來（晚變）
-//  • 速球：重力拋物線 arc·t(1−t)。逆旋越強（四縫線）有效重力越小、軌跡越平；伸卡、二縫線拋物線較大，進壘時往下掉
-//  • 其他球種：依球速加上弧度
+// 球的位置（t=0 出手、t=1 通過本壘板，依時間）。軌跡是 engine.js 的 pitchFlight 用物理算好的 P.path：
+// 每點 [飛行距離比例 u, 相對「出手點到進壘點直線」的偏移 dx, dy]。球會因空氣阻力變慢，所以後段 u 走得比較慢
 function ballPos(P,t){
-  const k=Math.pow(t,P.late), releaseY=3.83; // 與 Q 版投手出手的球形手掌對齊
-  const x=P.relX+(P.x-P.relX)*t+P.bx*(k-t);
-  let y=releaseY+(P.y-releaseY)*t+P.by*(k-t);
-  y+=P.lift!==undefined?(P.arc||0)*t*(1-t):(1-P.vr)*2.4*Math.sin(Math.PI*t);
-  return {x, y, z:56*(1-t)};
+  const releaseY=3.83; // 與 Q 版投手出手的球形手掌對齊
+  const pa=flightPath(P), n=pa.length-1, f=clamp(t,0,1)*n, i=Math.min(n-1,Math.floor(f)), w=f-i, a=pa[i], b=pa[i+1];
+  const u=a[0]+(b[0]-a[0])*w, dx=a[1]+(b[1]-a[1])*w, dy=a[2]+(b[2]-a[2])*w;
+  return {x:P.relX+(P.x-P.relX)*u+dx, y:releaseY+(P.y-releaseY)*u+dy, z:56*(1-u)};
 }
 const pw=(ks,vs,k)=>{let i=0;while(i<ks.length-2&&k>ks[i+1])i++;const u=clamp((k-ks[i])/(ks[i+1]-ks[i]),0,1);return vs[i]+(vs[i+1]-vs[i])*u;};
 function drawBatter(now){
@@ -620,7 +617,7 @@ function drawBall(now){
 }
 function drawPCI(now){
   if(!humanBat())return;
-  const b=curBatter(), p=curPitcher(), plat=b.bats!==p.throws?1:-1, con=clamp(b.con-matchShift(b,p)+plat*4,1,ABIL_MAX);   // 和 contactCalc 一樣
+  const b=curBatter(), p=curPitcher(), plat=b.bats!==p.throws?1:-1, con=clamp(b.con-hitShift(b,p)+plat*4,1,ABIL_MAX);   // 和 contactCalc 一樣
   const rn=(0.28+con/99*0.30), rp=rn*0.62, c=proj(UI.pci.x,UI.pci.y,0), R=rn*c.s, SW=7;
   ctx.save();
   // 外框（一般打擊範圍）與淡色用力打擊範圍
@@ -661,9 +658,9 @@ function drawAim(){
   ctx.save(); ctx.strokeStyle=fixed?'#f3c230':'rgba(255,255,255,.95)'; ctx.lineWidth=2.2;
   ctx.beginPath(); ctx.arc(c.X,c.Y,10,0,7); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(c.X-17,c.Y);ctx.lineTo(c.X-6,c.Y);ctx.moveTo(c.X+6,c.Y);ctx.lineTo(c.X+17,c.Y);ctx.moveTo(c.X,c.Y-17);ctx.lineTo(c.X,c.Y-6);ctx.moveTo(c.X,c.Y+6);ctx.lineTo(c.X,c.Y+17);ctx.stroke();
-  const p=curPitcher(), pp=p.pitches[UI.chosen], d=PITCH_DEFS[pp.n], arm=p.throws==='R'?-1:1, sc=0.55+0.45*pp.r/99;
-  const fake={x:UI.aim.x,y:UI.aim.y,bx:d.hb*arm*sc*BREAK_K,by:d.vb*sc*BREAK_K,late:d.late*LATE_K,relX:arm*1.35,vr:d.v,
-    lift:d.lift, arc:d.lift!==undefined?fbArc(d,veloMph(p.velo)*d.v):0};
+  // 預估軌跡：同一套物理、能力不打折的力道 0.85、沒有控球偏差
+  const p=curPitcher(), pp=p.pitches[UI.chosen], d=PITCH_DEFS[pp.n], arm=p.throws==='R'?-1:1, sc=(0.55+0.45*pp.r/99)*1.105, relX=arm*1.35;
+  const fake={x:UI.aim.x,y:UI.aim.y,relX,path:pitchFlight(veloMph(p.velo)*d.v,spinOf(d,sc),d.eff,d.axis,arm,relX,UI.aim.x,UI.aim.y,true).path};
   ctx.setLineDash([3,5]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.8; ctx.beginPath();
   for(let i=0;i<=24;i++){const q=ballPos(fake,i/24), pr=proj(q.x,q.y,q.z); i?ctx.lineTo(pr.X,pr.Y):ctx.moveTo(pr.X,pr.Y);} ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();

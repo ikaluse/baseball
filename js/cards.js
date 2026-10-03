@@ -1,5 +1,5 @@
 // cards.js — 球員卡介面：大張球員卡（openCard）、球員資料庫瀏覽（openDBV）
-// 依賴：engine.js（PITCH_DEFS、POS_NAME、BREAK_K…）、render.js（avatar）、db.js（LEAGUE、queryPlayers…）
+// 依賴：engine.js（PITCH_DEFS、POS_NAME、pitchMove…）、render.js（avatar）、db.js（LEAGUE、queryPlayers…）
 'use strict';
 const FA_TEAM={id:'fa', name:'自由球員', short:'FA', color:'#6b7785'};
 const teamById=id=>LEAGUE.teams.find(t=>t.id===id)||FA_TEAM;
@@ -20,16 +20,20 @@ function statRow(label, v, shown, cap){
   const g=grade(v);
   return `<div class="pc-r"><span class="pc-l">${label}</span><span class="gr g-${g}">${g}</span><span class="pc-v">${shown??v}</span><span class="pc-b"><i class="g-${g}" style="width:${abilPct(v)}%"></i>${cap?`<b class="pc-cap" style="left:${abilPct(cap)}%" title="上限 ${cap}"></b>`:''}</span></div>`;
 }
-// 球路變化圖：捕手視角，點的位置 = 該球種相對直線的位移方向與大小（含 BREAK_K）
+// 球路變化圖：捕手視角，點的位置 = 該球種旋轉造成的位移（engine.js 的 pitchMove，不含重力，和 Statcast 的位移圖一樣）
 function moveChart(p){
   const arm=p.throws==='R'?-1:1, k=26, c=78;
-  const dots=p.pitches.map(x=>{const d=PITCH_DEFS[x.n], sc=0.55+0.45*x.r/99;
-    const X=clamp(c+d.hb*arm*sc*BREAK_K*k,10,146), Y=clamp(c-d.vb*sc*BREAK_K*k,10,146), g=grade(x.r);
-    return `<line x1="${c}" y1="${c}" x2="${X}" y2="${Y}" class="mv-l"/><circle cx="${X}" cy="${Y}" r="5" class="mv-d g-${g}"/>
-      <text x="${X+(X<c?-7:7)}" y="${Y+4}" text-anchor="${X<c?'end':'start'}" class="mv-t">${SHORT[x.n]}</text>`;}).join('');
+  const pts=p.pitches.map(x=>{const m=pitchMove(p,x);
+    const X=clamp(c+m.hb*arm*k,10,146), Y=clamp(c-m.ivb*k,10,146);
+    return {X, Y, ly:Y+4, left:X<c, g:grade(x.r), n:x.n};});
+  // 位移相近的球種（例如伸卡、二縫線、變速球）標籤往上下錯開，不疊在一起
+  [true,false].forEach(side=>{const s=pts.filter(q=>q.left===side).sort((a,b)=>a.ly-b.ly);
+    for(let i=1;i<s.length;i++) if(s[i].ly-s[i-1].ly<10) s[i].ly=s[i-1].ly+10;});
+  const dots=pts.map(({X,Y,ly,left,g,n})=>`<line x1="${c}" y1="${c}" x2="${X}" y2="${Y}" class="mv-l"/><circle cx="${X}" cy="${Y}" r="5" class="mv-d g-${g}"/>
+      <text x="${X+(left?-7:7)}" y="${ly}" text-anchor="${left?'end':'start'}" class="mv-t">${SHORT[n]}</text>`).join('');
   return `<svg viewBox="0 0 156 156" class="mv"><rect x="1" y="1" width="154" height="154" rx="6" class="mv-bg"/>
     <line x1="${c}" y1="8" x2="${c}" y2="148" class="mv-a"/><line x1="8" y1="${c}" x2="148" y2="${c}" class="mv-a"/>
-    <text x="150" y="${c-4}" text-anchor="end" class="mv-ax">${arm<0?'一壘側':'三壘側'}</text><text x="${c+4}" y="16" class="mv-ax">上竄</text><text x="${c+4}" y="146" class="mv-ax">下墜</text>
+    <text x="150" y="${c-4}" text-anchor="end" class="mv-ax">一壘側</text><text x="${c+4}" y="16" class="mv-ax">上竄</text><text x="${c+4}" y="146" class="mv-ax">下墜</text>
     ${dots}</svg>`;
 }
 function hotZone(p){

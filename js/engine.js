@@ -1,33 +1,35 @@
 // engine.js — 比賽引擎（不依賴畫面，可在瀏覽器或 Node.js 執行）
 // 球種資料、球員產生、投球/揮棒/擊球判定、跑壘與計分、AI 投打
 // ===== ENGINE START =====
-// 球種定義：v=相對直球球速, hb=臂側水平位移(ft, 正=往投手臂側；左右投相反), vb=垂直位移(ft, 正=上竄), late=晚變指數, cost=體力消耗倍率
-// 速球類另有：lift=自轉產生的升力佔重力的比例（逆旋越強越抗重力，軌跡越平）、la=被擊中時仰角的偏移（伸卡、二縫線容易打成滾地球）
-//   四縫線：強烈逆旋 → 上竄尾勁、略帶臂側位移；投在高處時進壘角度平，打者容易打在球下方
-//   二縫線：自轉效率低 → 明顯臂側位移＋自然下沉
-//   伸卡：側旋更多 → 進壘前往臂側竄、下墜最多，打者容易打到球的上半部
+// 球種定義：v=相對直球球速, cost=體力消耗倍率, la=被擊中時仰角的偏移（伸卡、二縫線容易打成滾地球）
+// 軌跡用物理模型算（見下方「投球物理」）：
+//   rpm＝轉速、eff＝轉速效率（有效旋轉的比例；其餘是不產生位移的陀螺旋轉）、
+//   axis＝轉軸角度（Statcast 的 spin axis，右投；180＝純逆旋往上竄、0＝純上旋往下墜、90 往手套側、270 往臂側），左投鏡像
+//   q＝球種好壞對轉速的影響：+1 球種能力越高轉越多（變化越大）；−1 越高轉越少（指叉、掌心靠低轉速下墜）
+// 數值參考大聯盟 Statcast 的典型轉速與位移（右投 94 mph 基準，臂側/上竄，吋）：
+//   四縫線 8/16、二縫線 15/8、伸卡 16/4、切球 −3/9、變速 14/6、指叉 6/1、滑球 −4/2、Sweeper −15/1、12-6 曲球 −2/−15
 const PITCH_DEFS = {
-  '四縫線':      {v:1.00, hb:0.30, vb:0.24, late:2.0, cost:1.00, fam:'FB', lift:0.55, la:3},
-  '二縫線':      {v:0.97, hb:0.62, vb:-0.26, late:2.2, cost:1.00, fam:'FB', lift:0.26, la:-3},
-  '上升快速球':  {v:1.005,hb:0.15, vb:0.42, late:2.4, cost:1.05, fam:'FB', lift:0.66, la:4},
-  '噴射球':      {v:0.96, hb:0.45, vb:-0.18, late:3.0, cost:1.05, fam:'FB', lift:0.30, la:-2},
-  '伸卡':        {v:0.96, hb:0.70, vb:-0.56, late:2.4, cost:1.05, fam:'FB', lift:0.12, la:-6},
-  '切球':        {v:0.93, hb:-0.25, vb:0.00, late:3.2, cost:1.05, fam:'FB', lift:0.35, la:0},
-  '變速球':      {v:0.86, hb:0.50, vb:-0.50, late:2.5, cost:0.95, fam:'OS'},
-  '圈指變速球':  {v:0.85, hb:0.65, vb:-0.60, late:2.6, cost:0.95, fam:'OS'},
-  '螃蟹球':      {v:0.85, hb:0.50, vb:-0.80, late:2.8, cost:1.05, fam:'OS'},
-  '掌心球':      {v:0.78, hb:0.25, vb:-0.85, late:2.2, cost:0.95, fam:'OS'},
-  '指叉球':      {v:0.87, hb:0.25, vb:-1.15, late:3.2, cost:1.20, fam:'OS'},
-  '快速指叉球':  {v:0.92, hb:0.25, vb:-0.80, late:3.4, cost:1.15, fam:'OS'},
-  '螺旋球':      {v:0.80, hb:0.90, vb:-0.90, late:2.3, cost:1.25, fam:'BR'},
-  '滑球':        {v:0.88, hb:-0.50, vb:-0.25, late:2.8, cost:1.10, fam:'BR'},
-  'V滑球':       {v:0.88, hb:-0.18, vb:-0.70, late:2.8, cost:1.10, fam:'BR'},
-  'Sweeper':     {v:0.84, hb:-1.10, vb:-0.10, late:2.2, cost:1.10, fam:'BR'},
-  '滑曲球':      {v:0.82, hb:-0.75, vb:-0.65, late:2.2, cost:1.10, fam:'BR'},
-  '12-6曲球':    {v:0.79, hb:-0.08, vb:-1.40, late:1.8, cost:1.10, fam:'BR'},
-  '1-7滑曲球':   {v:0.80, hb:-0.65, vb:-1.05, late:1.9, cost:1.10, fam:'BR'},
-  '3-9曲球':     {v:0.78, hb:-1.20, vb:-0.50, late:1.8, cost:1.10, fam:'BR'},
-  '慢速曲球':    {v:0.70, hb:-0.35, vb:-1.55, late:1.6, cost:0.90, fam:'BR'},
+  '四縫線':      {v:1.00, cost:1.00, fam:'FB', rpm:2300, eff:0.94, axis:207, q:1, la:3},
+  '二縫線':      {v:0.97, cost:1.00, fam:'FB', rpm:2200, eff:0.90, axis:242, q:1, la:-3},
+  '上升快速球':  {v:1.005,cost:1.05, fam:'FB', rpm:2650, eff:0.94, axis:194, q:1, la:4},
+  '噴射球':      {v:0.96, cost:1.05, fam:'FB', rpm:2400, eff:0.63, axis:238, q:1, la:-2},
+  '伸卡':        {v:0.96, cost:1.05, fam:'FB', rpm:2150, eff:0.89, axis:256, q:1, la:-6},
+  '切球':        {v:0.93, cost:1.05, fam:'FB', rpm:2450, eff:0.44, axis:162, q:1, la:0},
+  '變速球':      {v:0.86, cost:0.95, fam:'OS', rpm:1750, eff:0.91, axis:247, q:1},
+  '圈指變速球':  {v:0.85, cost:0.95, fam:'OS', rpm:1850, eff:0.92, axis:256, q:1},
+  '螃蟹球':      {v:0.85, cost:1.05, fam:'OS', rpm:1900, eff:0.81, axis:266, q:1},
+  '掌心球':      {v:0.78, cost:0.95, fam:'OS', rpm:1200, eff:0.50, axis:252, q:-1},
+  '指叉球':      {v:0.87, cost:1.20, fam:'OS', rpm:900,  eff:0.71, axis:261, q:-1},
+  '快速指叉球':  {v:0.92, cost:1.15, fam:'OS', rpm:1400, eff:0.71, axis:243, q:-1},
+  '螺旋球':      {v:0.80, cost:1.25, fam:'BR', rpm:2100, eff:0.80, axis:283, q:1},
+  '滑球':        {v:0.88, cost:1.10, fam:'BR', rpm:2450, eff:0.19, axis:117, q:1},
+  'V滑球':       {v:0.88, cost:1.10, fam:'BR', rpm:2500, eff:0.18, axis:14,  q:1},
+  'Sweeper':     {v:0.84, cost:1.10, fam:'BR', rpm:2600, eff:0.59, axis:94,  q:1},
+  '滑曲球':      {v:0.82, cost:1.10, fam:'BR', rpm:2500, eff:0.45, axis:59,  q:1},
+  '12-6曲球':    {v:0.79, cost:1.10, fam:'BR', rpm:2550, eff:0.55, axis:8,   q:1},
+  '1-7滑曲球':   {v:0.80, cost:1.10, fam:'BR', rpm:2500, eff:0.51, axis:36,  q:1},
+  '3-9曲球':     {v:0.78, cost:1.10, fam:'BR', rpm:2550, eff:0.61, axis:76,  q:1},
+  '慢速曲球':    {v:0.70, cost:0.90, fam:'BR', rpm:2300, eff:0.58, axis:17,  q:1},
 };
 const SHORT = {'四縫線':'四縫','二縫線':'二縫','上升快速球':'上升','噴射球':'噴射','伸卡':'伸卡','切球':'切球','變速球':'變速','圈指變速球':'圈變','螃蟹球':'螃蟹','掌心球':'掌心','指叉球':'指叉','快速指叉球':'快指','螺旋球':'螺旋','滑球':'滑球','V滑球':'V滑','Sweeper':'橫掃','滑曲球':'滑曲','12-6曲球':'12-6','1-7滑曲球':'1-7','3-9曲球':'3-9','慢速曲球':'慢曲'};
 const POS_NAME = {C:'捕手','1B':'一壘手','2B':'二壘手','3B':'三壘手',SS:'游擊手',LF:'左外野手',CF:'中外野手',RF:'右外野手',DH:'指定打擊'};
@@ -114,8 +116,68 @@ function ensureBaseFastball(p){
   const names=withBaseFastball(p.pitches.map(x=>x.n)); if(names[0]===p.pitches[0].n) return false;
   p.pitches=p.pitches.map((x,i)=>({n:names[i], r:x.r})); return true;
 }
-// 速球的重力拋物線高度：拋物線相對直線的位移 = arc·t(1-t)，arc = 有效重力 × 飛行時間² / 2
-const fbArc=(d,mph)=>{const T=18.4/(mph*0.447); return 32.2*(1-d.lift)*T*T/2;};
+/* ---------- 投球物理 ----------
+   座標（ft）：x＝捕手視角往右、y＝離地高度、z＝往投手方向（本壘板 z=0）。球從 (relX, 6, 56) 出手。
+   每一小段時間算三種力（每單位質量）：
+     重力 g（往下 32.17 ft/s²）
+     空氣阻力 K·C_D·v²（和速度反向），K＝½ρA/m（海平面空氣、標準棒球）
+     馬格努斯力 K·C_L·v²（方向 ω̂×v̂），C_L＝KL·S，S＝球半徑×有效角速度÷球速（旋轉參數）
+   轉軸在空間中固定（陀螺效應），飛行中球速變慢 → S 變大、升力係數跟著變。
+   先朝目標直線出手積分一次，再依落點誤差修正出手方向（等於把整條軌跡加上一段線性修正），所以一定投到 target。 */
+const PHYS={K:0.005417, CD:0.35, KL:0.85, RB:0.1196, G:32.174, Z0:56, Y0:6.0, DT:1/120, N:24};
+// 整體轉速倍率（試玩覺得變化太小或太大時調這個；1＝照真實轉速）
+const SPIN_K=1.0;
+// 打者心中「一般速球」的位移（ft；臂側、上竄），用來算球種有多出乎意料（bmag、ride）
+const FB_REF={hb:7/12, ivb:10/12};
+// wantPath＝要不要輸出畫面用的路徑（電腦對電腦模擬不需要，省時間）
+function pitchFlight(mph, rpm, eff, axis, arm, relX, tx, ty, wantPath){
+  const {K,CD,KL,RB,G,Z0,Y0,DT,N}=PHYS, v0=mph*1.4667;
+  let x=relX, y=Y0, z=Z0;
+  const dx0=tx-x, dy0=ty-y, L=Math.hypot(dx0,dy0,Z0);
+  let vx=v0*dx0/L, vy=v0*dy0/L, vz=-v0*Z0/L;
+  // 位移方向（捕手視角）：axis 換成「上竄」與「臂側」，臂側在畫面上的方向＝arm（右投往左）
+  const th=axis*Math.PI/180, mx=-Math.sin(th)*arm, my=-Math.cos(th);
+  // ω̂ ＝ v̂ × m̂⊥（讓 ω̂×v̂ 剛好指向位移方向）
+  const hx=vx/v0, hy=vy/v0, hz=vz/v0, md=mx*hx+my*hy;
+  let px=mx-md*hx, py=my-md*hy, pz=-md*hz; const pl=Math.hypot(px,py,pz)||1; px/=pl; py/=pl; pz/=pl;
+  const wx=hy*pz-hz*py, wy=hz*px-hx*pz, wz=hx*py-hy*px, om=rpm*eff*Math.PI/30;
+  // mvx/mvy、mx_/my_：只算馬格努斯力造成的位移（＝Statcast 的 induced movement）
+  let t=0, mvx=0, mvy=0, mpx=0, mpy=0;
+  const pts=wantPath?[[0,x,y,z]]:null;
+  while(z>0&&t<2){
+    const v=Math.hypot(vx,vy,vz), cl=Math.min(0.4,KL*RB*om/v), fd=K*CD*v, fl=K*cl*v;
+    const ax=-fd*vx+fl*(wy*vz-wz*vy), ay=-fd*vy+fl*(wz*vx-wx*vz)-G, az=-fd*vz+fl*(wx*vy-wy*vx);
+    const lx=fl*(wy*vz-wz*vy), ly=fl*(wz*vx-wx*vz);
+    let dt=DT; const last=z+vz*dt<=0; if(last) dt=-z/vz;   // 最後一步剛好停在本壘板
+    vx+=ax*dt; vy+=ay*dt; vz+=az*dt; x+=vx*dt; y+=vy*dt; z+=vz*dt; t+=dt;
+    mvx+=lx*dt; mvy+=ly*dt; mpx+=mvx*dt; mpy+=mvy*dt;
+    if(last) z=0;
+    if(pts) pts.push([t,x,y,z]);
+    if(last) break;
+  }
+  // 依落點誤差修正：軌跡上每一點加上 (目標−落點)×(t/T)
+  const T=t, ex=tx-x, ey=ty-y;
+  // 輸出：等時間間隔 N 段，每點 [u＝已飛行距離比例, 相對「出手點→進壘點直線」的偏移 dx, dy]
+  const path=pts?[]:null; let j=0;
+  if(pts) for(let i=0;i<=N;i++){
+    const s=T*i/N; while(j<pts.length-2&&pts[j+1][0]<s) j++;
+    const a=pts[j], b=pts[j+1]||a, f=b[0]>a[0]?(s-a[0])/(b[0]-a[0]):0;
+    const X=a[1]+(b[1]-a[1])*f+ex*s/T, Y=a[2]+(b[2]-a[2])*f+ey*s/T, Z=a[3]+(b[3]-a[3])*f, u=1-Z/Z0;
+    path.push([Math.round(u*1e4)/1e4, Math.round((X-(relX+(tx-relX)*u))*1e3)/1e3, Math.round((Y-(Y0+(ty-Y0)*u))*1e3)/1e3]);   // 取到 mm，連線對戰傳送時比較短
+  }
+  const vaa=Math.atan2(vy+ey/T, -vz)*180/Math.PI;
+  return {T, path, vaa, mphEnd:Math.hypot(vx,vy,vz)/1.4667, pfxH:mpx*arm, pfxV:mpy};   // pfxH：臂側為正
+}
+// 畫面用：這一球的路徑（第一次用到才算，存在 P.path）
+const flightPath=P=>P.path||(P.path=pitchFlight(...P.fl, P.x, P.y, true).path);
+// 這一球實際的轉速：球種能力、力道、體力形成的倍率 sc（約 0.6～1.15）。q=−1 的球種反過來，能力越高轉越少
+const spinOf=(d,sc)=>d.rpm*SPIN_K*(d.q<0?Math.max(0.5,2-sc):sc);
+// 球路變化圖用：這位投手這個球種的位移（ft，臂側/上竄），不含重力
+function pitchMove(p, pp, power=0.85){
+  const d=PITCH_DEFS[pp.n], sc=(0.55+0.45*pp.r/99)*(0.85+0.3*power);
+  const f=pitchFlight(veloMph(p.velo)*d.v, spinOf(d,sc), d.eff, d.axis, -1, 0, 0, 2.5);
+  return {hb:f.pfxH, ivb:f.pfxV, rpm:Math.round(spinOf(d,sc))};
+}
 
 /* ---------- 聯盟與球員名單 ----------
    LEAGUE = {players:{id:球員}, teams:[{id,…, roster:[id], lineup:[{id,pos}], rotation:[id], bullpen:[id], closer:id, rotIdx}], freeAgents:[id]}
@@ -414,10 +476,10 @@ const fatigue=p=>p.energy>=50?1:0.76+0.24*Math.max(0,p.energy)/50;
 const ZX=0.71, ZB=1.6, ZT=3.5, BR=0.12;
 const isStrike=(x,y)=>Math.abs(x)<=ZX+BR && y>=ZB-BR && y<=ZT+BR;
 
-// 晚變倍率：參考 MVP Baseball 2005 的實機畫面，前 2/3 幾乎直線、最後一段才明顯變化
-const LATE_K=1.3;
-// 變化幅度倍率：試玩後覺得位移不夠明顯，整體放大 20%
-const BREAK_K=1.2;
+// 球種多出乎打者意料 → AI 打者揮棒的難度（bmag）、速球的上竄/下沉騙過打者的量（ride）。
+// 換算倍率對齊改成物理模型之前的數值，聯盟的打擊數據不變
+// bmag 另外算進「比速球慢、多受重力影響」的落差：½·g·T²·(1−v²)，權重 BMAG_G
+const BMAG_K=0.55, BMAG_G=0.55, RIDE_K=0.33;
 // meter：人類投球時由計量條算出的偏移。數字＝隨機方向偏移量(ft)；{dx,dy}＝指定方向偏移；0/省略＝AI 投球
 function makePitch(p, idx, target, power, meter){
   const pp=p.pitches[idx], d=PITCH_DEFS[pp.n], ff=fatigue(p);
@@ -434,22 +496,18 @@ function makePitch(p, idx, target, power, meter){
   else if(meter){const a=rnd()*Math.PI*2; dx+=Math.cos(a)*meter; dy+=Math.sin(a)*meter;}
   else {dx*=1.3; dy*=1.3;}
   const x=clamp(target.x+dx,-2.4,2.4), y=clamp(target.y+dy,0.2,5.2);
-  const bx=d.hb*arm*sc*BREAK_K, by=d.vb*sc*BREAK_K, late=d.late*(0.8+0.4*pp.r/99)*LATE_K;
-  // 速球：重力拋物線＋自轉升力。ride = 和一般速球相比，打者「預期之外」多出來的上竄(+)或下沉(-)（ft）；
-  // 高進壘點的四縫線進壘角度平，上竄感更強
-  let arc=0, ride=0;
-  if(d.lift!==undefined){
-    const T=18.4/(mph*0.447);
-    arc=fbArc(d,mph);
-    ride=(d.lift-0.3)*32.2*T*T/2*0.22*(0.55+0.45*pp.r/99);
-    if(d.lift>=0.5&&y>ZT-0.7) ride*=1.6;
-  }
-  // 垂直進壘角度（VAA）：以真人的出手高度 6 ft 換算，負值＝往下進壘
-  const vy=(y-6.0)+by*(late-1)-(d.lift!==undefined?arc:(1-d.v)*2.4*Math.PI);
-  const vaa=Math.atan(vy/55)*180/Math.PI;
-  return {name:pp.n, fam:d.fam, idx, mph, heat, x, y, bx, by, lift:d.lift, arc, ride, vaa, laShift:d.la||0,
-    late, travel:18.4/(mph*0.447)*1000*1.9,
-    rating:pp.r*(0.85+0.15*ff)*(0.9+0.2*power), power, vr:d.v, relX:arm*1.35, cost:d.cost, bmag:Math.hypot(d.hb,d.vb)*sc*BREAK_K};
+  const rpm=spinOf(d,sc), relX=arm*1.35;
+  // fl＝重算軌跡需要的參數（畫面要畫球時才用 flightPath 算路徑；連線對戰兩邊算出來一樣）
+  const fl=[mph, rpm, d.eff, d.axis, arm, relX], F=pitchFlight(...fl, x, y, false);
+  // 和打者心中的一般速球比，位移差多少（ft）。ride＝速球「預期之外」的上竄(+)或下沉(-)；
+  // 上竄很強的速球（四縫線、上升快速球）投在高處時進壘角度平，上竄感更強
+  const offH=F.pfxH-FB_REF.hb, offV=F.pfxV-FB_REF.ivb;
+  let ride=0;
+  if(d.fam==='FB'){ ride=offV*RIDE_K; if(d.axis>180&&d.axis<215&&y>ZT-0.7) ride*=1.6; }
+  return {name:pp.n, fam:d.fam, idx, mph, heat, x, y, ride, vaa:F.vaa, laShift:d.la||0,
+    rpm:Math.round(rpm), pfx:[Math.round(F.pfxH*120)/10, Math.round(F.pfxV*120)/10], fl,
+    travel:F.T*1000*1.9,
+    rating:pp.r*(0.85+0.15*ff)*(0.9+0.2*power), power, vr:d.v, relX, cost:d.cost, bmag:Math.hypot(offH,offV-BMAG_G*PHYS.G/2*F.T*F.T*(1-d.v*d.v))*BMAG_K};
 }
 function spendEnergy(p, P){p.energy=Math.max(0,p.energy-100/(35+p.stam*0.9)*P.cost*(0.7+0.6*P.power)); p.pc++;}
 
@@ -475,15 +533,20 @@ function aiNeedsChange(p){return p.energy<20 || (p.ra>=6 && p.energy<70) || (p.r
    只影響看不到的判定（揮棒、擊中、擊球品質），球速、位移、控球偏差都照真實能力。 */
 const MATCH_BASE=72;
 const matchShift=(b,p)=>Math.max(0,Math.min(b.ovr,p.ovr)-MATCH_BASE);
+/* 打者補正：白綠藍能力上限調降（2026-10-03）後，野手常有守備、臂力很高的單項，整張卡縮得比投手多
+   （聯盟先發打線總評平均 −3、投手幾乎不變）。打擊與守備判定裡野手的能力加回 HIT_ADJ，聯盟的打擊數據維持改版前的水準
+   （模擬 2000 場：打擊率 .270、三振率 19%、每隊每場 4.2 分） */
+const HIT_ADJ=2;
+const hitShift=(b,p)=>matchShift(b,p)-HIT_ADJ;   // 打者那一邊要扣掉的量（負的＝加分）
 function aiSwing(b, p, P){
-  const {balls,strikes}=G, inZ=isStrike(P.x,P.y), s=matchShift(b,p);
-  const plat=b.bats!==p.throws?1:-1, con=clamp(b.con-s+plat*4,1,ABIL_MAX), eye=b.eye-s, rating=P.rating-s, heat=P.heat-s*0.17/30;
+  const {balls,strikes}=G, inZ=isStrike(P.x,P.y), s=matchShift(b,p), hs=hitShift(b,p);
+  const plat=b.bats!==p.throws?1:-1, con=clamp(b.con-hs+plat*4,1,ABIL_MAX), eye=b.eye-hs, rating=P.rating-s, heat=P.heat-s*0.17/30;
   let ps = inZ ? 0.62+(con-50)/400 : 0.17-(eye-50)/220+(rating-50)/300;
   if(strikes===2) ps+= inZ?0.28:0.16;
   if(balls===3&&strikes<2) ps-=0.2;
   if(balls===0&&strikes===0) ps-=0.1;
   if(rnd()>ps) return {type:'none'};
-  const type = strikes<2 && ((balls>strikes&&b.pow-s>=70&&rnd()<0.6)||(b.pow-s>=85&&rnd()<0.3)) ? 'power':'normal';
+  const type = strikes<2 && ((balls>strikes&&b.pow-hs>=70&&rnd()<0.6)||(b.pow-hs>=85&&rnd()<0.3)) ? 'power':'normal';
   const diff=rating/99*0.6+heat+P.bmag*0.3;
   const sl=Math.max(0.04,0.16+(1-con/99)*0.30+diff*0.2);
   const st=Math.max(8,24+(1-con/99)*45+diff*24);
@@ -494,8 +557,8 @@ function aiSwing(b, p, P){
 }
 
 function contactCalc(b,p,P,sw){
-  const plat=b.bats!==p.throws?1:-1, s=matchShift(b,p);
-  const con=clamp(b.con-s+plat*4,1,ABIL_MAX), pow=clamp(b.pow-s+plat*3,1,ABIL_MAX);
+  const plat=b.bats!==p.throws?1:-1, s=matchShift(b,p), hs=hitShift(b,p);
+  const con=clamp(b.con-hs+plat*4,1,ABIL_MAX), pow=clamp(b.pow-hs+plat*3,1,ABIL_MAX);
   const pw=sw.type==='power';
   const RR=(0.28+con/99*0.30)*(pw?0.62:1)+BR;
   const dx=P.x-sw.x, dy=P.y-sw.y, dist=Math.hypot(dx,dy);
@@ -526,7 +589,8 @@ function battedBall(ev,la,spray,b){
   if(dist>400) dist=400+(dist-400)*0.5;
   const res={type, dist, spray, ev, la, hit:null, out:false, dp:false, error:false, infield:false, pos:null};
   // 守備也套用對決基準（打者和投手都很強時，守備員能力一起扣掉同樣的量）
-  const s=G?matchShift(b,curPitcher()):0, F=f=>({spd:f.spd-s, fld:f.fld-s, thr:f.thr-s, arm:f.arm-s}), bs=b.spd-s;
+  // 野手（守備員與跑者）一樣加回打者補正 HIT_ADJ
+  const s=G?hitShift(b,curPitcher()):-HIT_ADJ, F=f=>({spd:f.spd-s, fld:f.fld-s, thr:f.thr-s, arm:f.arm-s}), bs=b.spd-s;
   const rng=f=>(f.spd*0.5+f.fld*0.5)/99;
   const errChance=f=>Math.max(0,(99-f.fld)/99*0.045+(99-f.thr)/99*0.025);
   if(type==='GB'){
@@ -994,14 +1058,16 @@ function enhancePlayer(p,roll=rnd()){
 /* 能力上限 150、球速最快 120 mph。min/max＝總評範圍；cap＝單項能力上限；vcap＝球速能力上限。
    球速換算：全力投球的最快球速＝60＋球速能力×0.4（topMph），所以 vcap 52/70/85/102/117/132/150
    對應最快 81/88/94/101/107/113/120 mph。白綠藍的其他能力維持 99（聯盟原有球員都在這三級）。 */
+// 單項能力上限 cap：白綠藍比照完美的比例（上限 102 ÷ 總評上限 86 ≈ 1.19）＝ 總評上限 × 1.19（2026-10-03 調降，原本都是 99）。
+// 完美以上不變。球速上限 vcap 不變（白 81、綠 88、藍 94 mph）
 const RARITY=[ // 由高到低
   {id:'mythic',  name:'神話', min:115, max:150, cap:150, vcap:150, color:'#e0202a'},
   {id:'legend',  name:'傳說', min:100, max:114, cap:132, vcap:132, color:'#ff8a1a'},
   {id:'epic',    name:'史詩', min:87,  max:99,  cap:117, vcap:117, color:'#8a4fd8'},
   {id:'perfect', name:'完美', min:75,  max:86,  cap:102, vcap:102, color:'#e6c02a'},
-  {id:'rare',    name:'稀有', min:68,  max:74,  cap:99,  vcap:85,  color:'#2f7fd1'},
-  {id:'fine',    name:'精良', min:60,  max:67,  cap:99,  vcap:70,  color:'#2e9b56'},
-  {id:'common',  name:'普通', min:0,   max:59,  cap:99,  vcap:52,  color:'#c9ced6'},
+  {id:'rare',    name:'稀有', min:68,  max:74,  cap:88,  vcap:85,  color:'#2f7fd1'},
+  {id:'fine',    name:'精良', min:60,  max:67,  cap:79,  vcap:70,  color:'#2e9b56'},
+  {id:'common',  name:'普通', min:0,   max:59,  cap:70,  vcap:52,  color:'#c9ced6'},
 ];
 const ABIL_MAX=150, MPH_MAX=120;
 const abilPct=v=>clamp(v/ABIL_MAX*100,0,100);                // 能力條的長度（150 是滿格）
@@ -1033,6 +1099,20 @@ function upliftOldCard(p){
   const target=Math.min(r.max,r.min+Math.round(f*(r.max-r.min)*0.6)+Math.max(0,old-ob[1]));   // 強化多出來的總評也帶過去
   if(target<=old) return false;
   shiftOvr(p,target); p.pot=clamp(Math.max(p.pot+(p.ovr-old),p.ovr),1,ABIL_MAX);
+  return true;
+}
+// 能力上限調降（2026-10-03）：有能力超過稀有度上限的卡，整張卡所有能力（含球種）乘同一個比例，
+// 讓超出最多的那一項剛好等於上限（球速對球速上限）。總評跟著降，潛力降同樣的比例
+function scaleToCaps(p){
+  const keys=ABILITY_KEYS[p.kind]; let f=1;
+  keys.forEach(k=>{ if(p[k]>0) f=Math.min(f,abilCap(p,k)/p[k]); });
+  if(p.pitches) p.pitches.forEach(x=>{ if(x.r>0) f=Math.min(f,abilCap(p,'pitch')/x.r); });
+  if(f>=1) return false;
+  const before=p.ovr;
+  keys.forEach(k=>p[k]=capAbil(p,k,Math.max(1,p[k]*f)));
+  if(p.pitches) p.pitches.forEach(x=>x.r=capAbil(p,'pitch',Math.max(1,x.r*f)));
+  recalcOvr(p);
+  p.pot=clamp(Math.round(p.pot*p.ovr/Math.max(1,before)),p.ovr,ABIL_MAX);
   return true;
 }
 const rarityOf=ovr=>RARITY.find(r=>ovr>=r.min);
@@ -1139,7 +1219,7 @@ function capLeaguePlayer(p){
     const base=Math.max(0,p.ovr-45); p.salary=Math.max(50,Math.round((50+base*base*1.5)*(p.age<=24?0.6:1)/10)*10);
   }
   p.rar=rarityOf(Math.min(p.ovr,RARE_CAP)).id;
-  fitRarityCaps(p);   // 球速壓到稀有度上限（白 81、綠 88、藍 94 mph）
+  scaleToCaps(p);   // 能力超過稀有度上限（白 70、綠 79、藍 88；球速白 52、綠 70、藍 85）的話，整張卡等比例縮
   return p;
 }
 // 合成檢查：ids = 5 張卡，mainId = 主卡（保留並升級的那張）
@@ -1279,11 +1359,11 @@ function scaleGameTeam(gt,targetLevel,rarId){
 
 // Node.js 用（例如模擬器或連線伺服器）：const E=require('./engine.js')
 if(typeof module!=='undefined') module.exports={
-  ABIL_MAX, MPH_MAX, veloMph, topMph, abilCap, capAbil, fitRarityCaps, upliftOldCard, OLD_BANDS,
-  PITCH_DEFS, SHORT, POS_NAME, TEAM_DEFS, TIER_NAME, LEAGUE_SIZE, buildLeague, hitterOvr, pitcherOvr, SYNTH_RATE, SYNTH_FAIL_BONUS, teamPower, levelOf, teamLevel, scaleGameTeam, gameTeamLevel, AI_TIERS, tierMult, tierPoints, optimizeRoster, autoSynthesize, cloneLeague, rarOf, rarCap, RARE_CAP, SYNTH_N, capLeaguePlayer, shiftOvr, synthCheck, synthesize, RARITY, rarityOf, rarityRank, GACHA, gachaRarities, createPlayer, TRAIN_MENU, ENH_MAX, ENH_COST, ENH_RATE, trainPlayer, enhancePlayer, ensureBaseFastball, withBaseFastball, FB_BASE, fbArc, playerValue, needFactor, fitRoster, tradeCheck, aiOffer, executeTrade, signFA, releasePlayer, setLevel, payroll, SALARY_CAP, ROSTER_MAX, autoLineup, autoStaff, movePlayer, nextStarter, gameTeam, newGame, getG:()=>G,
+  ABIL_MAX, MPH_MAX, veloMph, topMph, abilCap, capAbil, fitRarityCaps, scaleToCaps, upliftOldCard, OLD_BANDS,
+  PITCH_DEFS, SHORT, POS_NAME, TEAM_DEFS, TIER_NAME, LEAGUE_SIZE, buildLeague, hitterOvr, pitcherOvr, SYNTH_RATE, SYNTH_FAIL_BONUS, teamPower, levelOf, teamLevel, scaleGameTeam, gameTeamLevel, AI_TIERS, tierMult, tierPoints, optimizeRoster, autoSynthesize, cloneLeague, rarOf, rarCap, RARE_CAP, SYNTH_N, capLeaguePlayer, shiftOvr, synthCheck, synthesize, RARITY, rarityOf, rarityRank, GACHA, gachaRarities, createPlayer, TRAIN_MENU, ENH_MAX, ENH_COST, ENH_RATE, trainPlayer, enhancePlayer, ensureBaseFastball, withBaseFastball, FB_BASE, PHYS, SPIN_K, FB_REF, pitchFlight, flightPath, spinOf, pitchMove, playerValue, needFactor, fitRoster, tradeCheck, aiOffer, executeTrade, signFA, releasePlayer, setLevel, payroll, SALARY_CAP, ROSTER_MAX, autoLineup, autoStaff, movePlayer, nextStarter, gameTeam, newGame, getG:()=>G,
   batTeam, fldTeam, curPitcher, curBatter, runs, fatigue, isStrike,
   makePitch, aiChoosePitch, aiSwing, aiBullpen, changePitcher, processPitch, endPA, substitute, swapPos, aiSubs, setPos, batVal, defVal, SUB_KIND,
-  setRandom:f=>{rnd=f;}, mulberry32, matchShift, MATCH_BASE,
+  setRandom:f=>{rnd=f;}, mulberry32, matchShift, MATCH_BASE, HIT_ADJ, hitShift,
   STAT_KEYS, blankStats, gameDecisions, recordGame, statRates, ipTxt,
   LEAGUES, POST_ROUNDS, SEASON_GAMES, circleRounds, makeSchedule, newSeason, simLeagueGame, seasonStandings, standCmp, gamesBack,
   playoffSeeds, startPlayoffs, seasonPending, applyResult, simPending, teamNext,

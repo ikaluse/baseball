@@ -111,6 +111,15 @@ window.DB_READY=(async()=>{
       DB.run("INSERT OR REPLACE INTO meta(key,value) VALUES('scale150','1')");
       await saveLeague();
     }
+    // 白綠藍能力上限調降（只做一次，記在 meta 的 capLow）：單項上限改成總評上限 × 1.19（白 70、綠 79、藍 88；完美以上不變），
+    // 超過的卡整張等比例縮（scaleToCaps）
+    let capped=null; try{capped=DB.exec("SELECT value FROM meta WHERE key='capLow'")[0];}catch(e){}
+    if(!capped){
+      Object.values(LEAGUE.players).forEach(scaleToCaps);
+      LEAGUE.teams.forEach(t=>{autoLineup(LEAGUE,t); autoStaff(LEAGUE,t);});
+      DB.run("INSERT OR REPLACE INTO meta(key,value) VALUES('capLow','1')");
+      await saveLeague();
+    }
     if(!LEAGUE.season){LEAGUE.season=newSeason(LEAGUE,1); await saveLeague();}   // 第一季的賽程
     if(inherited&&DB_SOURCE!=='bundled') await persistDB();                      // 繼承來的舊共用存檔，馬上存成自己的一份
   }catch(e){
