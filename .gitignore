@@ -1,0 +1,19 @@
+# 不上傳到 GitHub 的檔案（GitHub Pages 是公開的）
+# 參考用的 MVP Baseball 2005 影片與截圖：有版權，而且影片很大
+*.mp4
+ref_mvp2005/
+# 個人紀錄與本機設定
+對話記錄.md
+.claude/
+# 3D 人物預覽工具（遊戲本身用不到）
+assets/
+開啟3D預覽.cmd
+tools/characters-3d.*
+tools/characters.html
+tools/characters-preview.png
+tools/prepare-character-model.py
+# Google 雲端硬碟、系統產生的檔案
+desktop.ini
+.DS_Store
+Thumbs.db
+*.tmp

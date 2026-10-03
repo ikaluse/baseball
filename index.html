@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="hot">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>投打對決</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- sql.js：在瀏覽器裡開 SQLite 球員資料庫；沒有網路時遊戲會改用內建產生器 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<!-- 雲端同步（Supabase）；js/cloud-config.js 沒填設定時不會用到 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+<!-- 登入與主選單（home.js） -->
+<div class="home" id="home">
+  <canvas id="homeBg" aria-hidden="true"></canvas>
+  <button class="snd-btn" data-snd>♪ 音樂：開</button>
+  <div class="home-in">
+    <header class="ttl">
+      <div class="ttl-sub">PITCHER <b>VS</b> BATTER</div>
+      <h1 class="ttl-main"><span>投打</span><span>對決</span></h1>
+      <p class="ttl-tag">燃燒吧！九局的熱血對決</p>
+    </header>
+    <section class="panel" id="login">
+      <h2>玩家登入</h2>
+      <div class="cloud-box" id="cloudBox" hidden>
+        <h3>雲端帳號<small>換電腦登入同一個帳號就能接著玩</small></h3>
+        <label class="fld">Email<input id="cEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <label class="fld">密碼<input id="cPass" type="password" autocomplete="current-password" placeholder="至少 6 個字"></label>
+        <div class="cloud-btns"><button class="hot-btn" id="cLogin">登入</button><button class="ghost" id="cSignup">註冊新帳號</button></div>
+        <p class="login-err" id="cErr"></p>
+        <div class="cloud-or"><span>或只在這台電腦玩</span></div>
+      </div>
+      <div class="prof-list" id="profList"></div>
+      <label class="fld">暱稱<input id="loginName" maxlength="12" placeholder="輸入暱稱（最多 12 字）" autocomplete="nickname"></label>
+      <p class="login-err" id="loginErr"></p>
+      <button class="hot-btn" id="loginGo">登入</button>
+      <p class="login-note">玩家資料存在這台電腦的瀏覽器裡，不需要密碼。</p>
+    </section>
+    <section class="panel menu" id="menu" hidden>
+      <div class="pbar" id="pbar"></div>
+      <nav class="mbtns">
+        <button class="mbtn" data-go="league"><i>01</i><b>聯賽</b><span>季賽、分區戰績、季後賽，贏球賺積分與金幣</span></button>
+        <button class="mbtn" data-go="single"><i>02</i><b>單人對戰</b><span>選難度和電腦打一場友誼賽</span></button>
+        <button class="mbtn" data-go="online"><i>03</i><b>連線對戰</b><span>和其他玩家即時對決</span></button>
+        <button class="mbtn" data-go="manage"><i>04</i><b>球員管理</b><span>球員卡、名單、訓練、強化與排行榜</span></button>
+        <button class="mbtn" data-go="trade"><i>05</i><b>交易市場</b><span>和其他球隊交易、簽自由球員</span></button>
+        <button class="mbtn" data-go="shop"><i>06</i><b>商城系統</b><span>球員卡池抽卡，有保底</span></button>
+        <button class="mbtn" data-go="settings"><i>07</i><b>設定</b><span>隊名、視角、外觀、資料管理</span></button>
+      </nav>
+    </section>
+  </div>
+</div>
+<div class="wrap">
+  <div class="field" id="field">
+    <canvas id="cv" width="900" height="700"></canvas>
+
+    <div class="pinfo" id="pinfo"></div>
+    <div class="bug" id="bug">
+      <div class="bug-rows"><div class="brow" id="r0"></div><div class="brow" id="r1"></div></div>
+      <div class="bug-mid"><span class="inn" id="inn"></span><span class="cnt" id="cnt"></span></div>
+      <div class="bug-dia"><svg id="dia" viewBox="0 0 130 84"></svg></div>
+    </div>
+
+    <div class="plate" id="plate"></div>
+    <div class="today" id="today"></div>
+
+    <div class="pad" id="pad" hidden></div>
+    <div class="bats" id="bats" hidden>
+      <button class="sw p" id="swp">用力<kbd>K</kbd></button>
+      <button class="sw n" id="swn">一般<kbd>J</kbd></button>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="help" id="help"></div>
+    <div class="pcx" id="pcx"></div>
+    <div class="ibar" id="ibar"></div>
+    <div class="intro" id="intro" hidden></div>
+    <button class="skip" id="skip" hidden>跳過開場 ▸▸</button>
+  </div>
+
+  <div class="tools">
+    <button class="ghost" id="chg">更換投手</button>
+    <button class="ghost" id="subBtn">換人</button>
+    <button class="ghost" id="camBtn">視角：自動</button>
+    <button class="ghost" data-snd>♪ 音樂：開</button>
+    <button class="ghost" id="simb">自動模擬這個半局</button>
+    <button class="ghost" id="quit">回到選隊畫面</button>
+  </div>
+  <div class="bull" id="bull" hidden></div>
+
+  <div class="info">
+    <div class="card wide"><table class="ls" id="ls"></table><canvas id="mini" width="280" height="210"></canvas></div>
+    <div class="card" id="pcard"></div>
+    <div class="card" id="bcard"></div>
+    <div class="card wide" style="grid-column:1/-1"><h3>比賽紀錄</h3><div class="log" id="log"></div></div>
+  </div>
+</div>
+
+<div class="overlay" id="setup" hidden>
+  <div class="dialog">
+    <h1>投打對決</h1>
+    <p class="lead">選一支球隊，你負責投球和打擊，守備由系統自動處理。</p>
+    <h2>我的球隊</h2>
+    <div class="teams" id="myTeams"></div>
+    <h2>對手</h2>
+    <div class="teams" id="opTeams"></div>
+    <h2>電腦難度</h2>
+    <div class="tiers" id="aiTier"></div>
+    <p class="ai-info" id="aiInfo"></p>
+    <h2>攻守順序</h2>
+    <div class="seg" id="side"><button data-v="0">先攻（客隊）</button><button data-v="1" class="sel">後攻（主隊）</button></div>
+    <h2>我的先發投手</h2>
+    <div class="sps" id="mySP"></div>
+    <div class="roster-btns"><button class="ghost" id="rosterBtn">查看我的球隊名單</button><button class="ghost" id="dbBtn">球員資料庫（球員卡）</button><button class="ghost" id="tradeBtn">交易市場</button></div>
+    <ul class="how">
+      <li>投球：按數字鍵或點右下角的球種 → 在好球帶點選目標 → 按三下中間的菱形或空白鍵（開始、力道、準度）。弧形計量條的藍色往左下填滿代表力道；白色指針回到綠色區時按下最準，太早球會偏高、太晚會偏低。好球帶上的紅色區是打者的熱區，藍色是冷區。</li>
+      <li>打擊：用滑鼠或手指移動擊球框對準來球。投手出手後會出現一個縮小的時機圈，縮到中間綠點的瞬間就是完美時機。<kbd>J</kbd> 一般打擊、<kbd>K</kbd> 用力打擊。用力打擊的框較小、時機較嚴，但打中飛得更遠。</li>
+      <li>時機偏早容易拉打，偏晚容易推打；擊球框對在球的下緣會打出飛球，對在上緣會打出滾地球。</li>
+    </ul>
+    <button class="go" id="start">開始比賽</button>
+    <button class="ghost back-home" id="toHome">← 回主選單</button>
+  </div>
+</div>
+<div class="overlay" id="subs" hidden><div class="dialog wide subs" id="subsBody"></div></div>
+<div class="overlay" id="over" hidden><div class="dialog" id="overBody"></div></div>
+<div class="overlay" id="roster" hidden><div class="dialog wide" id="rosterBody"></div></div>
+<div class="overlay" id="dbv" hidden>
+  <div class="dialog wide dbv">
+    <div class="dbv-hd"><h1>球員資料庫</h1><button class="ghost" id="dbvClose">關閉</button></div>
+    <div class="dbv-ctl" id="dbvCtl"></div>
+    <div class="dbv-grid" id="dbvGrid"></div>
+    <div class="dbv-pager" id="dbvPager"></div>
+    <div class="dbv-ft"><span id="dbvSrc"></span><button class="ghost" id="dbvExport">匯出 players.sqlite</button><button class="ghost" id="dbvReset">還原初始資料</button></div>
+  </div>
+</div>
+<div class="overlay" id="trade" hidden>
+  <div class="dialog wide trade">
+    <button class="ghost tr-close" id="tradeClose">關閉</button>
+    <div id="tradeHd"></div>
+    <div id="tradeBody"></div>
+  </div>
+</div>
+<div class="overlay" id="league" hidden><div class="dialog wide league" id="leagueBody"></div></div>
+<div class="overlay" id="teamPick" hidden><div class="dialog wide tpick" id="teamPickBody"></div></div>
+<div class="overlay" id="manage" hidden><div class="dialog hub" id="manageBody"></div></div>
+<div class="overlay" id="shop" hidden><div class="dialog wide shop" id="shopBody"></div></div>
+<div class="overlay" id="settings" hidden><div class="dialog" id="settingsBody"></div></div>
+<div class="overlay" id="online" hidden><div class="dialog" id="onlineBody"></div></div>
+<div class="overlay" id="admin" hidden><div class="dialog wide admin" id="adminBody"></div></div>
+<div class="overlay top" id="cloudDlg" hidden><div class="dialog" id="cloudDlgBody"></div></div>
+<div class="overlay top" id="cardm" hidden><div class="cardwrap" id="cardBody"></div></div>
+
+<script src="data/players_db.js"></script>
+<script>
+// 依序載入程式；db.js 會非同步開啟球員資料庫，等 window.DB_READY 完成才載入介面
+(function(){
+  var files=['engine.js','render.js','db.js','cards.js','ui.js','trade.js','audio.js','home.js','admin.js','cloud-config.js','cloud.js'];
+  function fail(f){
+    var d=document.querySelector('#setup .dialog');
+    d.insertAdjacentHTML('afterbegin','<p style="background:#e45050;color:#fff;padding:10px 12px;border-radius:4px;margin:0 0 12px">找不到 js/'+f+
+      '。請確認 index.html 旁邊的 js 資料夾裡有 '+files.join('、')+'。</p>');
+  }
+  function load(i){
+    if(i>=files.length) return;
+    var s=document.createElement('script'); s.src='js/'+files[i];
+    s.onload=function(){ Promise.resolve(files[i]==='db.js'?window.DB_READY:null).then(function(){ load(i+1); }); };
+    s.onerror=function(){ fail(files[i]); };
+    document.body.appendChild(s);
+  }
+  load(0);
+})();
+</script>
+</body>
+</html>
